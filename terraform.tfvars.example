@@ -33,8 +33,9 @@ management_gateway = "10.200.0.1"
 dns_servers = ["1.1.1.1"]
 dns_domain  = "example.net"
 
-# Optional SSH public key included in NoCloud data. Omit it to leave SSH
-# disabled. Supplying a key enables root key authentication in the bootstrap.
+# Optional key-only administrative SSH user created by the OPNsense bootstrap.
+# Omit ssh_public_key_path to leave SSH disabled.
+# cloudinit_username  = "proxmox"
 # ssh_public_key_path = "./id_ed25519.pub"
 
 # Optional VM hardware and lifecycle settings.
@@ -51,6 +52,9 @@ dns_domain  = "example.net"
 # vm_protection        = false
 # vm_reboot            = false
 # vm_hotplug           = "network,disk,usb"
+# qemu_agent_enabled    = true
+# qemu_agent_type       = "virtio"
+# qemu_agent_wait_for_ip = { disabled = true, ipv4 = false, ipv6 = false }
 # cores                = 4
 # cpu_type             = "host"
 # cpu_sockets          = 1
@@ -68,5 +72,4 @@ dns_domain  = "example.net"
 # serial_device_enabled = true
 # serial_device         = "socket"
 # cloudinit_interface    = "ide2"
-# cloudinit_username     = "root"
 # additional_nics        = []

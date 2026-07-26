@@ -11,14 +11,15 @@ The project keeps environment-specific settings outside the base image and suppo
 - import the source image into the selected VM storage;
 - let Proxmox allocate the VM ID and management MAC automatically;
 - configure CPU, memory, system disk, bridge, VLAN and additional NICs;
-- pass hostname, management IP, gateway, DNS and SSH keys through NoCloud;
+- pass hostname, management IP, gateway, DNS and an administrative SSH key through NoCloud;
+- enable QEMU Guest Agent integration for Proxmox by default;
 
 ## Requirements
 
 - OpenTofu 1.12 or newer;
 - Proxmox VE API access;
 - `bpg/proxmox` provider 0.111.1;
-- an OPNsense image containing the NoCloud bootstrap integration.
+- an OPNsense image built with the `proxmox` profile, including `sudo` and `os-qemu-guest-agent`.
 
 ## Repository files
 
@@ -108,6 +109,22 @@ The value may be increased but must not be smaller than the virtual size of the 
 
 The VM resource is named `proxmox_virtual_environment_vm.opnsense`. A `moved` block migrates the previous state address `proxmox_virtual_environment_vm.firewall` without destroying or recreating the VM.
 
+## SSH administration
+
+When `ssh_public_key_path` is set, the NoCloud bootstrap creates the user named by `cloudinit_username`. The default is `proxmox`. The account:
+
+- accepts only the supplied SSH public key;
+- has no usable password;
+- receives administrative privileges through `sudo`;
+- does not enable SSH login for root;
+- does not disable the OPNsense firewall.
+
+The username remains configurable and is not embedded in the image.
+
+## QEMU Guest Agent
+
+QEMU Guest Agent is enabled in both layers: the OPNsense image starts the agent, and the Proxmox VM configuration exposes the `virtio` guest-agent channel. OpenTofu does not wait for an IP address by default, so agent startup cannot hold `apply` open.
+
 ## Post-deployment verification
 
 OpenTofu finishes after Proxmox creates and starts the VM. It does not attempt SSH access or an OPNsense API readiness check. Verify the first boot and bootstrap result manually through the Proxmox console.
@@ -132,6 +149,8 @@ The provided `.gitignore` excludes these files. State can still contain sensitiv
 - `management_mac = null`: Proxmox generates a MAC address;
 - `cloudinit_datastore = null`: `vm_datastore` is used;
 - `disk_size_gb = 21`;
+- `cloudinit_username = "proxmox"`;
+- `qemu_agent_enabled = true`;
 - one VirtIO management NIC is created; extra NICs are optional.
 
 Review `terraform.tfvars.example` and every variable description before applying the configuration to a new environment.

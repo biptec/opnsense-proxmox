@@ -180,7 +180,7 @@ variable "dns_domain" {
 }
 
 variable "ssh_public_key_path" {
-  description = "Optional local path to an SSH public key installed for root through Cloud-Init."
+  description = "Optional local path to an SSH public key installed for cloudinit_username through NoCloud."
   type        = string
   default     = null
 }
@@ -377,7 +377,7 @@ variable "vm_boot_order" {
 variable "qemu_agent_enabled" {
   description = "Enable the QEMU guest agent integration in the Proxmox VM configuration."
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "qemu_agent_timeout" {
@@ -393,19 +393,23 @@ variable "qemu_agent_trim" {
 }
 
 variable "qemu_agent_type" {
-  description = "Optional QEMU guest agent interface type. Null uses the provider default."
+  description = "QEMU guest agent interface type exposed to the VM."
   type        = string
-  default     = null
+  default     = "virtio"
 }
 
 variable "qemu_agent_wait_for_ip" {
-  description = "Optional QEMU agent IP wait settings. Null omits the wait_for_ip block."
+  description = "QEMU agent IP wait settings. The default keeps the agent enabled without blocking apply while the guest boots."
   type = object({
     disabled = optional(bool)
     ipv4     = optional(bool)
     ipv6     = optional(bool)
   })
-  default = null
+  default = {
+    disabled = true
+    ipv4     = false
+    ipv6     = false
+  }
 }
 
 variable "cpu_type" {
@@ -562,9 +566,14 @@ variable "disk_speed" {
 }
 
 variable "cloudinit_username" {
-  description = "Guest username that receives the supplied SSH public key and is used by the readiness check."
+  description = "Key-only administrative user created by the OPNsense NoCloud bootstrap."
   type        = string
-  default     = "root"
+  default     = "proxmox"
+
+  validation {
+    condition     = can(regex("^[a-z_][a-z0-9_-]{0,31}$", var.cloudinit_username)) && var.cloudinit_username != "root"
+    error_message = "cloudinit_username must be a valid non-root Unix username."
+  }
 }
 
 variable "cloudinit_interface" {
