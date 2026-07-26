@@ -1,7 +1,7 @@
 # The ID may have been explicitly requested or automatically assigned by Proxmox.
 output "vm_id" {
   description = "Actual Proxmox VM ID."
-  value       = proxmox_virtual_environment_vm.firewall.vm_id
+  value       = proxmox_virtual_environment_vm.opnsense.vm_id
 }
 
 output "management_ip" {

@@ -81,6 +81,21 @@ image_file_id = "local:import/OPNsense.qcow2"
 
 The existing import file remains outside OpenTofu management and is not deleted by this configuration.
 
+## Configurable VM hardware
+
+All VM values explicitly managed by this configuration are exposed as variables rather than fixed literals in `main.tf`. This includes:
+
+- VM description, tags, power state, boot behaviour, machine type, SCSI controller and boot order;
+- QEMU guest agent settings;
+- CPU type, sockets, cores, flags, NUMA, affinity, limits and units;
+- dedicated, balloon, hugepage and shared-memory settings;
+- system-disk interface, size, cache, discard, I/O thread, queues, replication and SSD flag;
+- Cloud-Init username;
+- management and additional NIC model, VLAN, firewall, MTU, queues, rate limit and trunk settings;
+- guest OS type and serial console device.
+
+Defaults are declared in `variables.tf`. Override only the required values in `terraform.tfvars`; see `terraform.tfvars.example` for common examples.
+
 ## System disk size
 
 The provider otherwise defaults to an 8 GiB disk during creation. The supplied OPNsense image uses a 20 GiB virtual disk, so the configuration defaults to:
@@ -100,7 +115,7 @@ Set `wait_for_api = true` and provide matching SSH key paths to:
 3. perform an authenticated OPNsense API request;
 4. save the credentials locally with mode `0600`.
 
-The check is disabled by default.
+The check is disabled by default. It is a separate OpenTofu resource: the VM may already be running while this step is still waiting for SSH authentication, the bootstrap credentials file, or an authenticated API response. The script prints the current phase and periodic progress messages.
 
 ## Sensitive and local files
 

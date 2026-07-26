@@ -250,9 +250,317 @@ variable "disk_size_gb" {
 variable "additional_nics" {
   description = "Optional additional VirtIO NICs. Their MAC addresses and VLAN IDs may also be omitted."
   type = list(object({
-    bridge      = string
-    mac_address = optional(string)
-    vlan_id     = optional(number)
+    bridge       = string
+    model        = optional(string)
+    mac_address  = optional(string)
+    vlan_id      = optional(number)
+    disconnected = optional(bool, false)
+    firewall     = optional(bool, false)
+    mtu          = optional(number)
+    queues       = optional(number)
+    rate_limit   = optional(number)
+    trunks       = optional(string)
   }))
   default = []
+}
+
+
+variable "vm_description" {
+  description = "Description stored in the Proxmox VM configuration."
+  type        = string
+  default     = "Managed by OpenTofu"
+}
+
+variable "vm_tags" {
+  description = "Proxmox metadata tags assigned to the VM."
+  type        = list(string)
+  default     = ["opnsense", "managed"]
+}
+
+variable "vm_started" {
+  description = "Whether the VM should be running after apply."
+  type        = bool
+  default     = true
+}
+
+variable "vm_on_boot" {
+  description = "Whether Proxmox should start the VM when the node boots."
+  type        = bool
+  default     = true
+}
+
+variable "vm_stop_on_destroy" {
+  description = "Whether the provider should force-stop rather than gracefully shut down the VM during destroy."
+  type        = bool
+  default     = true
+}
+
+variable "vm_machine" {
+  description = "QEMU machine type used by the VM, for example q35 or pc."
+  type        = string
+  default     = "q35"
+}
+
+variable "vm_scsi_hardware" {
+  description = "Emulated SCSI controller model used by the VM."
+  type        = string
+  default     = "virtio-scsi-single"
+}
+
+variable "vm_boot_order" {
+  description = "Ordered list of devices from which the VM attempts to boot."
+  type        = list(string)
+  default     = ["scsi0"]
+}
+
+variable "qemu_agent_enabled" {
+  description = "Enable the QEMU guest agent integration in the Proxmox VM configuration."
+  type        = bool
+  default     = false
+}
+
+variable "qemu_agent_timeout" {
+  description = "Maximum time to wait for data from the QEMU guest agent. Null uses the provider default."
+  type        = string
+  default     = null
+}
+
+variable "qemu_agent_trim" {
+  description = "Enable the QEMU guest agent FSTRIM feature."
+  type        = bool
+  default     = false
+}
+
+variable "qemu_agent_type" {
+  description = "QEMU guest agent interface type."
+  type        = string
+  default     = "virtio"
+}
+
+variable "cpu_type" {
+  description = "Emulated CPU type exposed to the VM, for example host or x86-64-v2-AES."
+  type        = string
+  default     = "host"
+}
+
+variable "cpu_sockets" {
+  description = "Number of virtual CPU sockets."
+  type        = number
+  default     = 1
+}
+
+variable "cpu_architecture" {
+  description = "Optional CPU architecture override. Null uses the provider default."
+  type        = string
+  default     = null
+}
+
+variable "cpu_affinity" {
+  description = "Optional Proxmox CPU affinity expression."
+  type        = string
+  default     = null
+}
+
+variable "cpu_flags" {
+  description = "Optional CPU feature flags passed to the VM."
+  type        = list(string)
+  default     = []
+}
+
+variable "cpu_hotplugged" {
+  description = "Number of hotplugged virtual CPUs."
+  type        = number
+  default     = 0
+}
+
+variable "cpu_limit" {
+  description = "Optional CPU usage limit. Null leaves it unset."
+  type        = number
+  default     = null
+}
+
+variable "cpu_numa" {
+  description = "Enable NUMA for the VM."
+  type        = bool
+  default     = false
+}
+
+variable "cpu_units" {
+  description = "Optional relative CPU weight. Null uses the provider default."
+  type        = number
+  default     = null
+}
+
+variable "memory_floating_mb" {
+  description = "Optional balloon memory in MiB. Null uses the provider default."
+  type        = number
+  default     = null
+}
+
+variable "memory_hugepages" {
+  description = "Optional hugepages mode, for example any, 2 or 1024. Null disables an explicit override."
+  type        = string
+  default     = null
+}
+
+variable "memory_keep_hugepages" {
+  description = "Keep hugepages allocated after VM shutdown."
+  type        = bool
+  default     = false
+}
+
+variable "memory_shared_mb" {
+  description = "Optional shared memory amount in MiB. Null uses the provider default."
+  type        = number
+  default     = null
+}
+
+variable "disk_interface" {
+  description = "Proxmox interface name for the imported system disk."
+  type        = string
+  default     = "scsi0"
+}
+
+variable "disk_aio" {
+  description = "Optional asynchronous I/O mode for the system disk."
+  type        = string
+  default     = null
+}
+
+variable "disk_backup" {
+  description = "Include the system disk in Proxmox backups."
+  type        = bool
+  default     = true
+}
+
+variable "disk_cache" {
+  description = "Optional cache mode for the system disk. Null uses the provider default."
+  type        = string
+  default     = null
+}
+
+variable "disk_discard" {
+  description = "Discard/TRIM mode for the system disk."
+  type        = string
+  default     = "on"
+}
+
+variable "disk_iothread" {
+  description = "Enable an I/O thread for the system disk."
+  type        = bool
+  default     = false
+}
+
+variable "disk_queues" {
+  description = "Optional number of I/O queues for the system disk."
+  type        = number
+  default     = null
+}
+
+variable "disk_replicate" {
+  description = "Allow the system disk to participate in Proxmox replication jobs."
+  type        = bool
+  default     = true
+}
+
+variable "disk_serial" {
+  description = "Optional serial number exposed by the system disk."
+  type        = string
+  default     = null
+}
+
+variable "disk_ssd" {
+  description = "Expose the system disk as SSD to the guest."
+  type        = bool
+  default     = true
+}
+
+variable "cloudinit_username" {
+  description = "Guest username that receives the supplied SSH public key and is used by the readiness check."
+  type        = string
+  default     = "root"
+}
+
+variable "network_model" {
+  description = "Default emulated NIC model for the management and additional interfaces."
+  type        = string
+  default     = "virtio"
+}
+
+variable "management_nic_disconnected" {
+  description = "Create the management NIC in a disconnected state."
+  type        = bool
+  default     = false
+}
+
+variable "management_nic_firewall" {
+  description = "Enable Proxmox firewall processing on the management NIC."
+  type        = bool
+  default     = false
+}
+
+variable "management_nic_mtu" {
+  description = "Optional MTU configured for the management NIC."
+  type        = number
+  default     = null
+}
+
+variable "management_nic_queues" {
+  description = "Optional number of multiqueue queues for the management NIC."
+  type        = number
+  default     = null
+}
+
+variable "management_nic_rate_limit" {
+  description = "Optional management NIC rate limit in megabytes per second."
+  type        = number
+  default     = null
+}
+
+variable "management_nic_trunks" {
+  description = "Optional VLAN trunk expression for the management NIC."
+  type        = string
+  default     = null
+}
+
+variable "operating_system_type" {
+  description = "Proxmox guest operating system type."
+  type        = string
+  default     = "other"
+}
+
+variable "serial_device_enabled" {
+  description = "Attach a serial console device to the VM."
+  type        = bool
+  default     = true
+}
+
+variable "serial_device" {
+  description = "Serial device backend, normally socket for the Proxmox serial console."
+  type        = string
+  default     = "socket"
+}
+
+variable "ssh_wait_attempts" {
+  description = "Maximum number of SSH/bootstrap credential checks performed by wait_for_api."
+  type        = number
+  default     = 90
+}
+
+variable "api_wait_attempts" {
+  description = "Maximum number of authenticated API checks performed by wait_for_api."
+  type        = number
+  default     = 60
+}
+
+variable "wait_interval_seconds" {
+  description = "Delay in seconds between readiness checks."
+  type        = number
+  default     = 5
+}
+
+variable "api_endpoint_path" {
+  description = "Authenticated OPNsense API path used for the readiness check."
+  type        = string
+  default     = "/api/interfaces/assignment/search_item"
 }

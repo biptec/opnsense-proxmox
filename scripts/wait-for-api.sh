@@ -1,50 +1,59 @@
 #!/bin/sh
 set -eu
 
-# This script runs only when wait_for_api=true. It waits for SSH, copies the
-# one-time bootstrap API credentials, and verifies a real authenticated request.
 : "${SSH_HOST:?SSH_HOST is required}"
+: "${SSH_USER:?SSH_USER is required}"
 : "${SSH_KEY:?SSH_KEY is required}"
+: "${SSH_WAIT_ATTEMPTS:?SSH_WAIT_ATTEMPTS is required}"
+: "${API_WAIT_ATTEMPTS:?API_WAIT_ATTEMPTS is required}"
+: "${WAIT_INTERVAL_SECONDS:?WAIT_INTERVAL_SECONDS is required}"
 : "${API_SCHEME:?API_SCHEME is required}"
+: "${API_ENDPOINT_PATH:?API_ENDPOINT_PATH is required}"
 : "${API_CREDENTIALS_OUT:?API_CREDENTIALS_OUT is required}"
 
 TMP=$(mktemp -d /tmp/opnsense-ready.XXXXXX)
 trap 'rm -rf "$TMP"' EXIT HUP INT TERM
 
-# Wait up to 7.5 minutes for first-boot bootstrap and SSH access.
+printf 'Waiting for SSH and bootstrap credentials on %s@%s\n' "$SSH_USER" "$SSH_HOST"
 attempt=1
-while [ "$attempt" -le 90 ]; do
+while [ "$attempt" -le "$SSH_WAIT_ATTEMPTS" ]; do
     if ssh -i "$SSH_KEY" \
         -o BatchMode=yes \
         -o ConnectTimeout=5 \
         -o StrictHostKeyChecking=no \
         -o UserKnownHostsFile=/dev/null \
-        "root@$SSH_HOST" \
+        "$SSH_USER@$SSH_HOST" \
         'test -s /conf/bootstrap-api.json && cat /conf/bootstrap-api.json' \
-        > "$TMP/credentials.json" 2>/dev/null; then
+        > "$TMP/credentials.json" 2> "$TMP/ssh-error"; then
         break
     fi
-    sleep 5
+
+    if [ $((attempt % 6)) -eq 0 ]; then
+        printf 'Still waiting for SSH/bootstrap credentials (%s/%s)\n' "$attempt" "$SSH_WAIT_ATTEMPTS"
+        tail -n 1 "$TMP/ssh-error" 2>/dev/null || true
+    fi
+
+    sleep "$WAIT_INTERVAL_SECONDS"
     attempt=$((attempt + 1))
 done
 
 if [ ! -s "$TMP/credentials.json" ]; then
-    echo "Timed out waiting for bootstrap credentials on $SSH_HOST" >&2
+    echo "Timed out waiting for bootstrap credentials on $SSH_USER@$SSH_HOST" >&2
+    tail -n 1 "$TMP/ssh-error" >&2 2>/dev/null || true
     exit 1
 fi
 
-# Parse credentials without printing them to stdout or the OpenTofu log.
 KEY=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["key"])' "$TMP/credentials.json")
 SECRET=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["secret"])' "$TMP/credentials.json")
 
-# Wait up to 5 minutes for the HTTPS API to become ready.
+printf 'Bootstrap credentials received; waiting for OPNsense API at %s://%s%s\n' "$API_SCHEME" "$SSH_HOST" "$API_ENDPOINT_PATH"
 attempt=1
-while [ "$attempt" -le 60 ]; do
+while [ "$attempt" -le "$API_WAIT_ATTEMPTS" ]; do
     CODE=$(curl -k -sS \
         -o "$TMP/api.json" \
         -w '%{http_code}' \
         -u "$KEY:$SECRET" \
-        "$API_SCHEME://$SSH_HOST/api/interfaces/assignment/search_item" \
+        "$API_SCHEME://$SSH_HOST$API_ENDPOINT_PATH" \
         2>/dev/null || true)
 
     if [ "$CODE" = "200" ] && \
@@ -56,7 +65,11 @@ while [ "$attempt" -le 60 ]; do
         exit 0
     fi
 
-    sleep 5
+    if [ $((attempt % 6)) -eq 0 ]; then
+        printf 'Still waiting for authenticated API response (%s/%s, HTTP %s)\n' "$attempt" "$API_WAIT_ATTEMPTS" "${CODE:-none}"
+    fi
+
+    sleep "$WAIT_INTERVAL_SECONDS"
     attempt=$((attempt + 1))
 done
 

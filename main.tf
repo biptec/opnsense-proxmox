@@ -8,6 +8,13 @@ locals {
   source_image_file_id = var.image_source == "local" ? proxmox_virtual_environment_file.image[0].id : var.image_file_id
 }
 
+# Preserve the existing state address after renaming the resource to a name that
+# clearly describes the VM rather than suggesting that Proxmox firewall is used.
+moved {
+  from = proxmox_virtual_environment_vm.firewall
+  to   = proxmox_virtual_environment_vm.opnsense
+}
+
 # Upload the source disk only in local mode. In proxmox mode count is zero and
 # OpenTofu leaves the existing Proxmox import file unmanaged and unchanged.
 resource "proxmox_virtual_environment_file" "image" {
@@ -34,34 +41,49 @@ resource "proxmox_virtual_environment_file" "image" {
   }
 }
 
-# Create the OPNsense virtual machine from the uploaded image.
-resource "proxmox_virtual_environment_vm" "firewall" {
+# Create the OPNsense virtual machine. Every explicitly managed VM option is
+# backed by a variable, so environment-specific choices belong in tfvars.
+resource "proxmox_virtual_environment_vm" "opnsense" {
   name        = var.vm_name
-  description = "Managed by OpenTofu"
-  tags        = ["opnsense", "managed"]
+  description = var.vm_description
+  tags        = var.vm_tags
 
   node_name       = var.node_name
-  vm_id           = var.vm_id # null lets Proxmox allocate the next free ID.
-  started         = true
-  on_boot         = true
-  stop_on_destroy = true
+  vm_id           = var.vm_id
+  started         = var.vm_started
+  on_boot         = var.vm_on_boot
+  stop_on_destroy = var.vm_stop_on_destroy
 
-  # q35, VirtIO SCSI, and host CPU are appropriate defaults for this image.
-  machine       = "q35"
-  scsi_hardware = "virtio-scsi-single"
-  boot_order    = ["scsi0"]
+  machine       = var.vm_machine
+  scsi_hardware = var.vm_scsi_hardware
+  boot_order    = var.vm_boot_order
 
   agent {
-    enabled = false
+    enabled = var.qemu_agent_enabled
+    timeout = var.qemu_agent_timeout
+    trim    = var.qemu_agent_trim
+    type    = var.qemu_agent_type
   }
 
   cpu {
-    cores = var.cores
-    type  = "host"
+    cores        = var.cores
+    type         = var.cpu_type
+    sockets      = var.cpu_sockets
+    architecture = var.cpu_architecture
+    affinity     = var.cpu_affinity
+    flags        = var.cpu_flags
+    hotplugged   = var.cpu_hotplugged
+    limit        = var.cpu_limit
+    numa         = var.cpu_numa
+    units        = var.cpu_units
   }
 
   memory {
-    dedicated = var.memory_mb
+    dedicated      = var.memory_mb
+    floating       = var.memory_floating_mb
+    hugepages      = var.memory_hugepages
+    keep_hugepages = var.memory_keep_hugepages
+    shared         = var.memory_shared_mb
   }
 
   # import_from accepts either the file uploaded above or an existing Proxmox
@@ -69,13 +91,17 @@ resource "proxmox_virtual_environment_vm" "firewall" {
   disk {
     datastore_id = var.vm_datastore
     import_from  = local.source_image_file_id
-    interface    = "scsi0"
-
-    # The provider otherwise defaults to an 8 GiB disk and would try to shrink
-    # the imported 20 GiB image. Proxmox supports growth, but not shrinking.
-    size    = var.disk_size_gb
-    discard = "on"
-    ssd     = true
+    interface    = var.disk_interface
+    size         = var.disk_size_gb
+    aio          = var.disk_aio
+    backup       = var.disk_backup
+    cache        = var.disk_cache
+    discard      = var.disk_discard
+    iothread     = var.disk_iothread
+    queues       = var.disk_queues
+    replicate    = var.disk_replicate
+    serial       = var.disk_serial
+    ssd          = var.disk_ssd
   }
 
   # Proxmox generates a NoCloud drive. The custom OPNsense bootstrap reads it
@@ -101,33 +127,44 @@ resource "proxmox_virtual_environment_vm" "firewall" {
     dynamic "user_account" {
       for_each = var.ssh_public_key_path == null ? [] : [var.ssh_public_key_path]
       content {
-        username = "root"
+        username = var.cloudinit_username
         keys     = [trimspace(file(user_account.value))]
       }
     }
   }
 
-  # Omitting management_mac delegates MAC allocation to Proxmox.
   network_device {
-    bridge      = var.bridge
-    model       = "virtio"
-    mac_address = var.management_mac
-    vlan_id     = var.management_vlan_id
+    bridge       = var.bridge
+    model        = var.network_model
+    mac_address  = var.management_mac
+    vlan_id      = var.management_vlan_id
+    disconnected = var.management_nic_disconnected
+    firewall     = var.management_nic_firewall
+    mtu          = var.management_nic_mtu
+    queues       = var.management_nic_queues
+    rate_limit   = var.management_nic_rate_limit
+    trunks       = var.management_nic_trunks
   }
 
-  # Extra NICs are optional and are created in list order.
+  # Extra NICs are optional and are created in list order. Each NIC may
+  # override the shared defaults independently.
   dynamic "network_device" {
     for_each = var.additional_nics
     content {
-      bridge      = network_device.value.bridge
-      model       = "virtio"
-      mac_address = try(network_device.value.mac_address, null)
-      vlan_id     = try(network_device.value.vlan_id, null)
+      bridge       = network_device.value.bridge
+      model        = coalesce(network_device.value.model, var.network_model)
+      mac_address  = network_device.value.mac_address
+      vlan_id      = network_device.value.vlan_id
+      disconnected = network_device.value.disconnected
+      firewall     = network_device.value.firewall
+      mtu          = network_device.value.mtu
+      queues       = network_device.value.queues
+      rate_limit   = network_device.value.rate_limit
+      trunks       = network_device.value.trunks
     }
   }
 
   lifecycle {
-    # Local mode needs an existing file on the machine running OpenTofu.
     precondition {
       condition = (
         var.image_source != "local" ||
@@ -136,7 +173,6 @@ resource "proxmox_virtual_environment_vm" "firewall" {
       error_message = "image_source=local requires image_path to reference an existing local image file."
     }
 
-    # Proxmox mode needs a file already stored as content type import.
     precondition {
       condition = (
         var.image_source != "proxmox" ||
@@ -147,21 +183,25 @@ resource "proxmox_virtual_environment_vm" "firewall" {
   }
 
   operating_system {
-    type = "other"
+    type = var.operating_system_type
   }
 
-  # A serial console remains useful if network bootstrap fails.
-  serial_device {}
+  dynamic "serial_device" {
+    for_each = var.serial_device_enabled ? [1] : []
+    content {
+      device = var.serial_device
+    }
+  }
 }
 
-# Optional post-deployment verification. It is disabled by default so the VM
-# can be deployed without local SSH key files or automatic API credential copy.
+# Optional post-deployment verification. This is a separate resource: the VM
+# can already be running while this step waits for SSH credentials and the API.
 resource "terraform_data" "wait_for_api" {
   count      = var.wait_for_api ? 1 : 0
-  depends_on = [proxmox_virtual_environment_vm.firewall]
+  depends_on = [proxmox_virtual_environment_vm.opnsense]
 
   triggers_replace = [
-    proxmox_virtual_environment_vm.firewall.id,
+    proxmox_virtual_environment_vm.opnsense.id,
     var.management_address,
     try(filesha256(var.ssh_private_key_path), null),
   ]
@@ -182,10 +222,15 @@ resource "terraform_data" "wait_for_api" {
     command = "${path.module}/scripts/wait-for-api.sh"
 
     environment = {
-      SSH_HOST            = local.management_ip
-      SSH_KEY             = var.ssh_private_key_path
-      API_SCHEME          = var.api_scheme
-      API_CREDENTIALS_OUT = var.api_credentials_path
+      SSH_HOST              = local.management_ip
+      SSH_USER              = var.cloudinit_username
+      SSH_KEY               = var.ssh_private_key_path
+      SSH_WAIT_ATTEMPTS     = tostring(var.ssh_wait_attempts)
+      API_WAIT_ATTEMPTS     = tostring(var.api_wait_attempts)
+      WAIT_INTERVAL_SECONDS = tostring(var.wait_interval_seconds)
+      API_SCHEME            = var.api_scheme
+      API_ENDPOINT_PATH     = var.api_endpoint_path
+      API_CREDENTIALS_OUT   = var.api_credentials_path
     }
   }
 }

@@ -38,10 +38,33 @@ wait_for_api = false
 # ssh_public_key_path  = "./id_ed25519.pub"
 # ssh_private_key_path = "./id_ed25519"
 
-# Optional resource settings.
+# Optional VM hardware and lifecycle settings.
+# vm_description       = "Managed by OpenTofu"
+# vm_tags              = ["opnsense", "managed"]
+# vm_started           = true
+# vm_on_boot           = true
+# vm_stop_on_destroy   = true
+# vm_machine           = "q35"
+# vm_scsi_hardware     = "virtio-scsi-single"
+# vm_boot_order        = ["scsi0"]
 # cores                = 4
+# cpu_type             = "host"
+# cpu_sockets          = 1
 # memory_mb            = 4096
+# disk_interface       = "scsi0"
 # disk_size_gb         = 20
-# additional_nics      = []
-# api_scheme           = "https"
-# api_credentials_path = "./bootstrap-api.json"
+# disk_discard         = "on"
+# disk_ssd             = true
+# network_model        = "virtio"
+# operating_system_type = "other"
+# serial_device_enabled = true
+# serial_device         = "socket"
+# additional_nics       = []
+
+# Optional readiness-check settings.
+# api_scheme             = "https"
+# api_endpoint_path      = "/api/interfaces/assignment/search_item"
+# api_credentials_path   = "./bootstrap-api.json"
+# ssh_wait_attempts      = 90
+# api_wait_attempts      = 60
+# wait_interval_seconds  = 5
