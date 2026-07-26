@@ -9,11 +9,6 @@ output "management_ip" {
   value       = local.management_ip
 }
 
-output "api_credentials_path" {
-  description = "Credentials file created by the optional API readiness check; null when that check is disabled."
-  value       = var.wait_for_api ? var.api_credentials_path : null
-}
-
 output "source_image_file_id" {
   description = "Proxmox import file ID used as the source of the VM system disk."
   value       = local.source_image_file_id

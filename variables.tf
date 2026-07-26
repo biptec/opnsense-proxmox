@@ -185,35 +185,6 @@ variable "ssh_public_key_path" {
   default     = null
 }
 
-variable "ssh_private_key_path" {
-  description = "Optional local path to the matching SSH private key. Required only when wait_for_api is true."
-  type        = string
-  default     = null
-}
-
-variable "wait_for_api" {
-  description = "After VM creation, connect over SSH, retrieve bootstrap API credentials, and wait for the OPNsense API."
-  type        = bool
-  default     = false
-}
-
-variable "api_scheme" {
-  description = "URL scheme used by the API readiness check."
-  type        = string
-  default     = "https"
-
-  validation {
-    condition     = contains(["http", "https"], var.api_scheme)
-    error_message = "api_scheme must be http or https."
-  }
-}
-
-variable "api_credentials_path" {
-  description = "Local output path for bootstrap API credentials when wait_for_api is enabled."
-  type        = string
-  default     = "./bootstrap-api.json"
-}
-
 variable "cores" {
   description = "Number of virtual CPU cores assigned to the VM."
   type        = number
@@ -678,28 +649,4 @@ variable "serial_device" {
   description = "Serial device backend, normally socket for the Proxmox serial console."
   type        = string
   default     = "socket"
-}
-
-variable "ssh_wait_attempts" {
-  description = "Maximum number of SSH/bootstrap credential checks performed by wait_for_api."
-  type        = number
-  default     = 90
-}
-
-variable "api_wait_attempts" {
-  description = "Maximum number of authenticated API checks performed by wait_for_api."
-  type        = number
-  default     = 60
-}
-
-variable "wait_interval_seconds" {
-  description = "Delay in seconds between readiness checks."
-  type        = number
-  default     = 5
-}
-
-variable "api_endpoint_path" {
-  description = "Authenticated OPNsense API path used for the readiness check."
-  type        = string
-  default     = "/api/interfaces/assignment/search_item"
 }

@@ -12,26 +12,23 @@ The project keeps environment-specific settings outside the base image and suppo
 - let Proxmox allocate the VM ID and management MAC automatically;
 - configure CPU, memory, system disk, bridge, VLAN and additional NICs;
 - pass hostname, management IP, gateway, DNS and SSH keys through NoCloud;
-- optionally wait for the first-boot bootstrap and verify the OPNsense API.
 
 ## Requirements
 
 - OpenTofu 1.12 or newer;
 - Proxmox VE API access;
 - `bpg/proxmox` provider 0.111.1;
-- an OPNsense image containing the NoCloud bootstrap integration;
-- `ssh`, `curl` and Python 3 when `wait_for_api = true`.
+- an OPNsense image containing the NoCloud bootstrap integration.
 
 ## Repository files
 
 ```text
-main.tf                    VM, image import and optional readiness check
+main.tf                    VM and image import configuration
 variables.tf               Inputs, defaults, validation and descriptions
 outputs.tf                 VM ID, management IP and source image ID
 versions.tf                OpenTofu and provider requirements
 terraform.tfvars.example   Non-secret configuration example
 token.auto.tfvars.example  API token example
-scripts/wait-for-api.sh    Optional SSH and API readiness verification
 ```
 
 ## Quick start
@@ -111,18 +108,11 @@ The value may be increased but must not be smaller than the virtual size of the 
 
 The VM resource is named `proxmox_virtual_environment_vm.opnsense`. A `moved` block migrates the previous state address `proxmox_virtual_environment_vm.firewall` without destroying or recreating the VM.
 
-## Optional API readiness check
+## Post-deployment verification
 
-Set `wait_for_api = true` and provide matching SSH key paths to:
+OpenTofu finishes after Proxmox creates and starts the VM. It does not attempt SSH access or an OPNsense API readiness check. Verify the first boot and bootstrap result manually through the Proxmox console.
 
-1. wait for SSH after first boot;
-2. read `/conf/bootstrap-api.json` without printing its contents;
-3. perform an authenticated OPNsense API request;
-4. save the credentials locally with mode `0600`.
-
-The check is disabled by default. It is a separate OpenTofu resource: the VM may already be running while this step is still waiting for SSH authentication, the bootstrap credentials file, or an authenticated API response. The script prints the current phase, periodic progress and the last SSH error without exposing API credentials.
-
-For example, `Permission denied (publickey,password,keyboard-interactive)` means the VM is reachable but the configured public key was not accepted by the guest. This is an SSH/bootstrap-key problem, not a VM creation problem.
+A successful `apply` confirms that the requested Proxmox resources were created; it does not prove that every guest service is ready.
 
 ## Sensitive and local files
 
@@ -132,7 +122,6 @@ Do not commit:
 - `terraform.tfvars`;
 - OpenTofu state;
 - private SSH keys;
-- `bootstrap-api.json`;
 - QCOW2 or raw image files.
 
 The provided `.gitignore` excludes these files. State can still contain sensitive resource data, so store it in an appropriately protected backend.
@@ -143,7 +132,6 @@ The provided `.gitignore` excludes these files. State can still contain sensitiv
 - `management_mac = null`: Proxmox generates a MAC address;
 - `cloudinit_datastore = null`: `vm_datastore` is used;
 - `disk_size_gb = 21`;
-- `wait_for_api = false`;
 - one VirtIO management NIC is created; extra NICs are optional.
 
 Review `terraform.tfvars.example` and every variable description before applying the configuration to a new environment.

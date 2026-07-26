@@ -10,7 +10,6 @@ crash.log
 !*.tfvars.example
 *.auto.tfvars
 !*.auto.tfvars.example
-bootstrap-api.json
 
 # Local SSH material.
 id_ed25519
