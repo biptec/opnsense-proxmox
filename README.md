@@ -19,7 +19,8 @@ The project keeps environment-specific settings outside the base image and suppo
 - OpenTofu 1.12 or newer;
 - Proxmox VE API access;
 - `bpg/proxmox` provider 0.111.1;
-- an OPNsense image built with the `proxmox` profile, including `sudo` and `os-qemu-guest-agent`.
+- an OPNsense build environment with `/usr/tools` and `/usr/plugins` when producing a new image;
+- the guest package in `guest/nocloud-bootstrap`, built together with `os-qemu-guest-agent`.
 
 ## Repository files
 
@@ -30,6 +31,8 @@ outputs.tf                 VM ID, management IP and source image ID
 versions.tf                OpenTofu and provider requirements
 terraform.tfvars.example   Non-secret configuration example
 token.auto.tfvars.example  API token example
+guest/nocloud-bootstrap/   Guest-side NoCloud package and tests
+image/build.sh             Reproducible Proxmox QCOW2 build entrypoint
 ```
 
 ## Quick start
@@ -56,6 +59,32 @@ tofu validate
 tofu plan
 tofu apply
 ```
+
+## Build the OPNsense image
+
+The repository contains both sides of the deployment contract. OpenTofu sends NoCloud data from the Proxmox side, while `os-nocloud-bootstrap` consumes it inside OPNsense.
+
+Build the QCOW2 on the OPNsense build host:
+
+```sh
+./image/build.sh
+```
+
+The wrapper calls the OPNsense custom-image pipeline with:
+
+```sh
+make -C /usr/tools custom-vm,qcow2,20G,never,proxmox \
+  ADDITIONS="os-qemu-guest-agent /path/to/opnsense-proxmox/guest/nocloud-bootstrap"
+```
+
+The guest package installs:
+
+```text
+/usr/local/opnsense/scripts/boot/nocloud_bootstrap.py
+/usr/local/etc/rc.syshook.d/early/20-nocloud-bootstrap
+```
+
+The source remains in this repository; it is not stored in the OPNsense core fork.
 
 ## Image source modes
 
