@@ -1,0 +1,23 @@
+# OpenTofu working directory and local state.
+.terraform/
+terraform.tfstate
+terraform.tfstate.*
+crash.log
+*.log
+
+# Environment-specific variables and credentials.
+*.tfvars
+!*.tfvars.example
+*.auto.tfvars
+!*.auto.tfvars.example
+bootstrap-api.json
+
+# Local SSH material.
+id_ed25519
+id_ed25519.pub
+*.pem
+
+# Large source images.
+*.qcow2
+*.raw
+*.img

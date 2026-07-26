@@ -1,0 +1,3 @@
+# Copy this file to token.auto.tfvars and replace only the token secret.
+# Never commit the resulting file.
+proxmox_api_token = "opentofu@pve!deployment=PASTE_TOKEN_SECRET_HERE"

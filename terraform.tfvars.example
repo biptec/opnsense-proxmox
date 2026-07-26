@@ -1,0 +1,47 @@
+# Proxmox API endpoint and target node.
+proxmox_endpoint = "https://pve01.example.net:8006/"
+proxmox_insecure = false
+node_name        = "pve01"
+
+# VM identity. Omit vm_id to let Proxmox allocate the next free ID.
+vm_name = "opnsense-test"
+# vm_id = 104
+
+# Image mode A: upload a local image from the OpenTofu runner.
+image_source    = "local"
+image_datastore = "local"
+image_path      = "./OPNsense.qcow2"
+# image_sha256  = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+# Image mode B: use an image already uploaded to Proxmox.
+# Comment the four local-mode values above and enable these two values:
+# image_source  = "proxmox"
+# image_file_id = "local:import/OPNsense.qcow2"
+
+# VM disk and optional Cloud-Init drive storage.
+vm_datastore = "local-vmdata01"
+# cloudinit_datastore = "local-vmdata01"
+
+# Management network. Omit management_mac to let Proxmox generate it.
+bridge             = "vmbr1"
+management_address = "10.200.0.50/24"
+management_gateway = "10.200.0.1"
+# management_mac     = "02:00:00:00:50:01"
+# management_vlan_id = 100
+
+# Optional guest DNS settings.
+dns_servers = ["1.1.1.1"]
+dns_domain  = "example.net"
+
+# Optional post-deployment SSH and API readiness verification.
+wait_for_api = false
+# ssh_public_key_path  = "./id_ed25519.pub"
+# ssh_private_key_path = "./id_ed25519"
+
+# Optional resource settings.
+# cores                = 4
+# memory_mb            = 4096
+# disk_size_gb         = 20
+# additional_nics      = []
+# api_scheme           = "https"
+# api_credentials_path = "./bootstrap-api.json"
