@@ -239,7 +239,7 @@ variable "memory_mb" {
 variable "disk_size_gb" {
   description = "System disk size in GiB after import. It must not be smaller than the virtual size of the source image."
   type        = number
-  default     = 20
+  default     = 21
 
   validation {
     condition     = var.disk_size_gb >= 1
@@ -248,14 +248,14 @@ variable "disk_size_gb" {
 }
 
 variable "additional_nics" {
-  description = "Optional additional VirtIO NICs. Their MAC addresses and VLAN IDs may also be omitted."
+  description = "Optional additional NICs. Every Proxmox NIC setting can be overridden per interface."
   type = list(object({
     bridge       = string
     model        = optional(string)
     mac_address  = optional(string)
     vlan_id      = optional(number)
-    disconnected = optional(bool, false)
-    firewall     = optional(bool, false)
+    disconnected = optional(bool)
+    firewall     = optional(bool)
     mtu          = optional(number)
     queues       = optional(number)
     rate_limit   = optional(number)
@@ -295,6 +295,96 @@ variable "vm_stop_on_destroy" {
   default     = true
 }
 
+variable "vm_acpi" {
+  description = "Optional ACPI setting. Null uses the provider default."
+  type        = bool
+  default     = null
+}
+
+variable "vm_bios" {
+  description = "Optional BIOS implementation, for example seabios or ovmf. Null uses the provider default."
+  type        = string
+  default     = null
+}
+
+variable "vm_delete_unreferenced_disks_on_destroy" {
+  description = "Optional setting controlling deletion of unreferenced disks during destroy. Null uses the provider default."
+  type        = bool
+  default     = null
+}
+
+variable "vm_hook_script_file_id" {
+  description = "Optional Proxmox hook script file ID."
+  type        = string
+  default     = null
+}
+
+variable "vm_hotplug" {
+  description = "Optional Proxmox hotplug feature expression."
+  type        = string
+  default     = null
+}
+
+variable "vm_keyboard_layout" {
+  description = "Optional keyboard layout for the VM console."
+  type        = string
+  default     = null
+}
+
+variable "vm_kvm_arguments" {
+  description = "Optional additional KVM command-line arguments."
+  type        = string
+  default     = null
+}
+
+variable "vm_migrate" {
+  description = "Optional setting to migrate the VM when node_name changes instead of recreating it."
+  type        = bool
+  default     = null
+}
+
+variable "vm_pool_id" {
+  description = "Optional Proxmox pool ID to which the VM is assigned."
+  type        = string
+  default     = null
+}
+
+variable "vm_protection" {
+  description = "Optional Proxmox protection flag preventing VM and disk removal."
+  type        = bool
+  default     = null
+}
+
+variable "vm_purge_on_destroy" {
+  description = "Optional setting controlling removal from backup jobs during destroy."
+  type        = bool
+  default     = null
+}
+
+variable "vm_reboot" {
+  description = "Optional reboot request managed by the provider. Null leaves it unset."
+  type        = bool
+  default     = null
+}
+
+variable "vm_reboot_after_update" {
+  description = "Optional permission for the provider to reboot the VM when an update requires it."
+  type        = bool
+  default     = null
+}
+
+variable "vm_tablet_device" {
+  description = "Optional USB tablet device setting. Null uses the provider default."
+  type        = bool
+  default     = null
+}
+
+variable "vm_template" {
+  description = "Optional setting to convert the VM into a Proxmox template."
+  type        = bool
+  default     = null
+}
+
 variable "vm_machine" {
   description = "QEMU machine type used by the VM, for example q35 or pc."
   type        = string
@@ -326,15 +416,25 @@ variable "qemu_agent_timeout" {
 }
 
 variable "qemu_agent_trim" {
-  description = "Enable the QEMU guest agent FSTRIM feature."
+  description = "Optional QEMU guest agent FSTRIM setting. Null uses the provider default."
   type        = bool
-  default     = false
+  default     = null
 }
 
 variable "qemu_agent_type" {
-  description = "QEMU guest agent interface type."
+  description = "Optional QEMU guest agent interface type. Null uses the provider default."
   type        = string
-  default     = "virtio"
+  default     = null
+}
+
+variable "qemu_agent_wait_for_ip" {
+  description = "Optional QEMU agent IP wait settings. Null omits the wait_for_ip block."
+  type = object({
+    disabled = optional(bool)
+    ipv4     = optional(bool)
+    ipv6     = optional(bool)
+  })
+  default = null
 }
 
 variable "cpu_type" {
@@ -344,9 +444,9 @@ variable "cpu_type" {
 }
 
 variable "cpu_sockets" {
-  description = "Number of virtual CPU sockets."
+  description = "Optional number of virtual CPU sockets. Null uses the provider default."
   type        = number
-  default     = 1
+  default     = null
 }
 
 variable "cpu_architecture" {
@@ -362,15 +462,15 @@ variable "cpu_affinity" {
 }
 
 variable "cpu_flags" {
-  description = "Optional CPU feature flags passed to the VM."
+  description = "Optional CPU feature flags passed to the VM. Null leaves them unset."
   type        = list(string)
-  default     = []
+  default     = null
 }
 
 variable "cpu_hotplugged" {
-  description = "Number of hotplugged virtual CPUs."
+  description = "Optional number of hotplugged virtual CPUs. Null uses the provider default."
   type        = number
-  default     = 0
+  default     = null
 }
 
 variable "cpu_limit" {
@@ -380,9 +480,9 @@ variable "cpu_limit" {
 }
 
 variable "cpu_numa" {
-  description = "Enable NUMA for the VM."
+  description = "Optional NUMA setting. Null uses the provider default."
   type        = bool
-  default     = false
+  default     = null
 }
 
 variable "cpu_units" {
@@ -404,9 +504,9 @@ variable "memory_hugepages" {
 }
 
 variable "memory_keep_hugepages" {
-  description = "Keep hugepages allocated after VM shutdown."
+  description = "Optional setting to keep hugepages allocated after shutdown. Null uses the provider default."
   type        = bool
-  default     = false
+  default     = null
 }
 
 variable "memory_shared_mb" {
@@ -428,9 +528,9 @@ variable "disk_aio" {
 }
 
 variable "disk_backup" {
-  description = "Include the system disk in Proxmox backups."
+  description = "Optional setting controlling inclusion of the system disk in backups. Null uses the provider default."
   type        = bool
-  default     = true
+  default     = null
 }
 
 variable "disk_cache" {
@@ -446,9 +546,9 @@ variable "disk_discard" {
 }
 
 variable "disk_iothread" {
-  description = "Enable an I/O thread for the system disk."
+  description = "Optional I/O thread setting for the system disk. Null uses the provider default."
   type        = bool
-  default     = false
+  default     = null
 }
 
 variable "disk_queues" {
@@ -458,9 +558,9 @@ variable "disk_queues" {
 }
 
 variable "disk_replicate" {
-  description = "Allow the system disk to participate in Proxmox replication jobs."
+  description = "Optional replication setting for the system disk. Null uses the provider default."
   type        = bool
-  default     = true
+  default     = null
 }
 
 variable "disk_serial" {
@@ -475,10 +575,43 @@ variable "disk_ssd" {
   default     = true
 }
 
+variable "disk_speed" {
+  description = "Optional system disk I/O limits. Null omits the speed block."
+  type = object({
+    iops_read            = optional(number)
+    iops_read_burstable  = optional(number)
+    iops_write           = optional(number)
+    iops_write_burstable = optional(number)
+    read                 = optional(number)
+    read_burstable       = optional(number)
+    write                = optional(number)
+    write_burstable      = optional(number)
+  })
+  default = null
+}
+
 variable "cloudinit_username" {
   description = "Guest username that receives the supplied SSH public key and is used by the readiness check."
   type        = string
   default     = "root"
+}
+
+variable "cloudinit_interface" {
+  description = "Optional Proxmox interface for the Cloud-Init drive. Null uses the provider default."
+  type        = string
+  default     = null
+}
+
+variable "cloudinit_type" {
+  description = "Optional Cloud-Init format override. Null uses the provider default."
+  type        = string
+  default     = null
+}
+
+variable "cloudinit_upgrade" {
+  description = "Optional first-boot package upgrade setting. Null uses the provider default."
+  type        = bool
+  default     = null
 }
 
 variable "network_model" {
@@ -487,16 +620,22 @@ variable "network_model" {
   default     = "virtio"
 }
 
-variable "management_nic_disconnected" {
-  description = "Create the management NIC in a disconnected state."
+variable "management_nic_enabled" {
+  description = "Optional enabled state for the management NIC. Null uses the provider default."
   type        = bool
-  default     = false
+  default     = null
+}
+
+variable "management_nic_disconnected" {
+  description = "Optional disconnected state for the management NIC. Null uses the provider default."
+  type        = bool
+  default     = null
 }
 
 variable "management_nic_firewall" {
-  description = "Enable Proxmox firewall processing on the management NIC."
+  description = "Optional Proxmox firewall setting for the management NIC. Null uses the provider default."
   type        = bool
-  default     = false
+  default     = null
 }
 
 variable "management_nic_mtu" {

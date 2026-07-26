@@ -54,6 +54,22 @@ resource "proxmox_virtual_environment_vm" "opnsense" {
   on_boot         = var.vm_on_boot
   stop_on_destroy = var.vm_stop_on_destroy
 
+  acpi                                 = var.vm_acpi
+  bios                                 = var.vm_bios
+  delete_unreferenced_disks_on_destroy = var.vm_delete_unreferenced_disks_on_destroy
+  hook_script_file_id                  = var.vm_hook_script_file_id
+  hotplug                              = var.vm_hotplug
+  keyboard_layout                      = var.vm_keyboard_layout
+  kvm_arguments                        = var.vm_kvm_arguments
+  migrate                              = var.vm_migrate
+  pool_id                              = var.vm_pool_id
+  protection                           = var.vm_protection
+  purge_on_destroy                     = var.vm_purge_on_destroy
+  reboot                               = var.vm_reboot
+  reboot_after_update                  = var.vm_reboot_after_update
+  tablet_device                        = var.vm_tablet_device
+  template                             = var.vm_template
+
   machine       = var.vm_machine
   scsi_hardware = var.vm_scsi_hardware
   boot_order    = var.vm_boot_order
@@ -63,6 +79,15 @@ resource "proxmox_virtual_environment_vm" "opnsense" {
     timeout = var.qemu_agent_timeout
     trim    = var.qemu_agent_trim
     type    = var.qemu_agent_type
+
+    dynamic "wait_for_ip" {
+      for_each = var.qemu_agent_wait_for_ip == null ? [] : [var.qemu_agent_wait_for_ip]
+      content {
+        disabled = wait_for_ip.value.disabled
+        ipv4     = wait_for_ip.value.ipv4
+        ipv6     = wait_for_ip.value.ipv6
+      }
+    }
   }
 
   cpu {
@@ -102,12 +127,29 @@ resource "proxmox_virtual_environment_vm" "opnsense" {
     replicate    = var.disk_replicate
     serial       = var.disk_serial
     ssd          = var.disk_ssd
+
+    dynamic "speed" {
+      for_each = var.disk_speed == null ? [] : [var.disk_speed]
+      content {
+        iops_read            = speed.value.iops_read
+        iops_read_burstable  = speed.value.iops_read_burstable
+        iops_write           = speed.value.iops_write
+        iops_write_burstable = speed.value.iops_write_burstable
+        read                 = speed.value.read
+        read_burstable       = speed.value.read_burstable
+        write                = speed.value.write
+        write_burstable      = speed.value.write_burstable
+      }
+    }
   }
 
   # Proxmox generates a NoCloud drive. The custom OPNsense bootstrap reads it
   # on first boot and applies hostname, network, DNS, SSH keys, and API setup.
   initialization {
     datastore_id = local.cloudinit_datastore_id
+    interface    = var.cloudinit_interface
+    type         = var.cloudinit_type
+    upgrade      = var.cloudinit_upgrade
 
     dynamic "dns" {
       for_each = var.dns_domain == null && length(var.dns_servers) == 0 ? [] : [1]
@@ -138,6 +180,7 @@ resource "proxmox_virtual_environment_vm" "opnsense" {
     model        = var.network_model
     mac_address  = var.management_mac
     vlan_id      = var.management_vlan_id
+    enabled      = var.management_nic_enabled
     disconnected = var.management_nic_disconnected
     firewall     = var.management_nic_firewall
     mtu          = var.management_nic_mtu
@@ -155,6 +198,7 @@ resource "proxmox_virtual_environment_vm" "opnsense" {
       model        = coalesce(network_device.value.model, var.network_model)
       mac_address  = network_device.value.mac_address
       vlan_id      = network_device.value.vlan_id
+      enabled      = network_device.value.enabled
       disconnected = network_device.value.disconnected
       firewall     = network_device.value.firewall
       mtu          = network_device.value.mtu

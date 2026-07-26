@@ -85,12 +85,12 @@ The existing import file remains outside OpenTofu management and is not deleted 
 
 All VM values explicitly managed by this configuration are exposed as variables rather than fixed literals in `main.tf`. This includes:
 
-- VM description, tags, power state, boot behaviour, machine type, SCSI controller and boot order;
-- QEMU guest agent settings;
+- VM description, tags, power state, boot behaviour, BIOS, machine type, protection, pool, hotplug and lifecycle settings;
+- QEMU guest agent settings, including optional IP waiting;
 - CPU type, sockets, cores, flags, NUMA, affinity, limits and units;
 - dedicated, balloon, hugepage and shared-memory settings;
-- system-disk interface, size, cache, discard, I/O thread, queues, replication and SSD flag;
-- Cloud-Init username;
+- system-disk interface, size, cache, discard, I/O thread, queues, replication, SSD flag and optional I/O limits;
+- Cloud-Init datastore, interface, type, upgrade policy and username;
 - management and additional NIC model, VLAN, firewall, MTU, queues, rate limit and trunk settings;
 - guest OS type and serial console device.
 
@@ -98,13 +98,18 @@ Defaults are declared in `variables.tf`. Override only the required values in `t
 
 ## System disk size
 
-The provider otherwise defaults to an 8 GiB disk during creation. The supplied OPNsense image uses a 20 GiB virtual disk, so the configuration defaults to:
+The provider otherwise defaults to an 8 GiB disk during creation. The current OPNsense image has a virtual size of approximately `20.254 GiB`, so the smallest whole-GiB value accepted by Proxmox is:
 
 ```hcl
-disk_size_gb = 20
+disk_size_gb = 21
 ```
 
 The value may be increased but must not be smaller than the virtual size of the source image. Proxmox does not support shrinking disks during import.
+
+
+## Resource address migration
+
+The VM resource is named `proxmox_virtual_environment_vm.opnsense`. A `moved` block migrates the previous state address `proxmox_virtual_environment_vm.firewall` without destroying or recreating the VM.
 
 ## Optional API readiness check
 
@@ -115,7 +120,9 @@ Set `wait_for_api = true` and provide matching SSH key paths to:
 3. perform an authenticated OPNsense API request;
 4. save the credentials locally with mode `0600`.
 
-The check is disabled by default. It is a separate OpenTofu resource: the VM may already be running while this step is still waiting for SSH authentication, the bootstrap credentials file, or an authenticated API response. The script prints the current phase and periodic progress messages.
+The check is disabled by default. It is a separate OpenTofu resource: the VM may already be running while this step is still waiting for SSH authentication, the bootstrap credentials file, or an authenticated API response. The script prints the current phase, periodic progress and the last SSH error without exposing API credentials.
+
+For example, `Permission denied (publickey,password,keyboard-interactive)` means the VM is reachable but the configured public key was not accepted by the guest. This is an SSH/bootstrap-key problem, not a VM creation problem.
 
 ## Sensitive and local files
 
@@ -135,7 +142,7 @@ The provided `.gitignore` excludes these files. State can still contain sensitiv
 - `vm_id = null`: Proxmox allocates the next free ID;
 - `management_mac = null`: Proxmox generates a MAC address;
 - `cloudinit_datastore = null`: `vm_datastore` is used;
-- `disk_size_gb = 20`;
+- `disk_size_gb = 21`;
 - `wait_for_api = false`;
 - one VirtIO management NIC is created; extra NICs are optional.
 
