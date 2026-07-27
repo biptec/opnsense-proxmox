@@ -411,15 +411,15 @@ variable "qemu_agent_type" {
 }
 
 variable "qemu_agent_wait_for_ip" {
-  description = "QEMU agent IP wait settings. The default keeps the agent enabled without blocking apply while the guest boots."
+  description = "QEMU agent IP wait settings. By default apply waits for a guest-reported IPv4 address so IP outputs represent actual guest state."
   type = object({
     disabled = optional(bool)
     ipv4     = optional(bool)
     ipv6     = optional(bool)
   })
   default = {
-    disabled = true
-    ipv4     = false
+    disabled = false
+    ipv4     = true
     ipv6     = false
   }
 }
