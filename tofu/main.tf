@@ -144,7 +144,7 @@ resource "proxmox_virtual_environment_vm" "opnsense" {
   }
 
   # Proxmox generates a NoCloud drive. The custom OPNsense bootstrap reads it
-  # on first boot and applies hostname, network, DNS, SSH keys, and API setup.
+  # on first boot and applies hostname, network, DNS and optional credentials.
   initialization {
     datastore_id = local.cloudinit_datastore_id
     interface    = var.cloudinit_interface
@@ -167,10 +167,11 @@ resource "proxmox_virtual_environment_vm" "opnsense" {
     }
 
     dynamic "user_account" {
-      for_each = var.ssh_public_key_path == null ? [] : [var.ssh_public_key_path]
+      for_each = var.cloudinit_password == null && var.ssh_public_key_path == null ? [] : [1]
       content {
         username = var.cloudinit_username
-        keys     = [trimspace(file(user_account.value))]
+        password = var.cloudinit_password
+        keys     = var.ssh_public_key_path == null ? null : [trimspace(file(var.ssh_public_key_path))]
       }
     }
   }

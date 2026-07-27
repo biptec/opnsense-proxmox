@@ -181,44 +181,68 @@ def update_config(user_data, network_data, device):
             keys.extend(str(value) for value in nested)
     keys = list(dict.fromkeys(str(value).strip() for value in keys if str(value).strip()))
 
-    ssh_username = str(user_data.get("user", "")).strip()
-    if keys and not ssh_username:
-        raise ValueError("NoCloud SSH keys require a non-empty user field")
-    if ssh_username:
-        if ssh_username == "root":
-            raise ValueError("NoCloud SSH user must not be root")
-        if not re.fullmatch(r"[a-z_][a-z0-9_-]{0,31}", ssh_username):
-            raise ValueError(f"Invalid NoCloud SSH username {ssh_username!r}")
+    password_hash = str(user_data.get("password") or "").strip()
+    if password_hash in {"", "*", "*0", "!", "!!"}:
+        password_hash = ""
+    elif not re.match(r"^\$(?:1|5|6|2[abxy]|argon2(?:i|d|id))\$", password_hash):
+        raise ValueError("NoCloud password must be a supported crypt hash")
 
-    if keys:
-        ssh_user = None
+    admin_username = str(user_data.get("user", "")).strip()
+    if (keys or password_hash) and not admin_username:
+        raise ValueError("NoCloud credentials require a non-empty user field")
+    if admin_username:
+        if admin_username == "root":
+            raise ValueError("NoCloud administration user must not be root")
+        if not re.fullmatch(r"[a-z_][a-z0-9_-]{0,31}", admin_username):
+            raise ValueError(f"Invalid NoCloud administration username {admin_username!r}")
+
+    root_user = None
+    for user in system.findall("user"):
+        if user.findtext("name") == "root":
+            root_user = user
+            break
+    if root_user is None:
+        raise ValueError("Root user is missing from config.xml")
+
+    # Disable root in OPNsense local authentication. The operating-system root
+    # account remains available to the console, but WebUI and API login are denied.
+    set_text(root_user, "disabled", "1")
+
+    credentials_present = bool(keys or password_hash)
+    if credentials_present:
+        admin_user = None
         used_uids = set()
         for user in system.findall("user"):
             try:
                 used_uids.add(int(user.findtext("uid", "")))
             except ValueError:
                 pass
-            if user.findtext("name") == ssh_username:
-                ssh_user = user
-        if ssh_user is None:
-            ssh_user = ET.SubElement(system, "user")
+            if user.findtext("name") == admin_username:
+                admin_user = user
+        if admin_user is None:
+            admin_user = ET.SubElement(system, "user")
 
-        user_uid = ssh_user.findtext("uid", "")
+        user_uid = admin_user.findtext("uid", "")
         if not user_uid:
             uid = 2000
             while uid in used_uids:
                 uid += 1
             user_uid = str(uid)
 
-        encoded = base64.b64encode(("\n".join(keys) + "\n").encode()).decode()
-        set_text(ssh_user, "uid", user_uid)
-        set_text(ssh_user, "name", ssh_username)
-        set_text(ssh_user, "disabled", "0")
-        set_text(ssh_user, "scope", "user")
-        set_text(ssh_user, "authorizedkeys", encoded)
-        set_text(ssh_user, "shell", "/bin/sh")
-        set_text(ssh_user, "password", "*")
-        set_text(ssh_user, "descr", "NoCloud administration user")
+        set_text(admin_user, "uid", user_uid)
+        set_text(admin_user, "name", admin_username)
+        set_text(admin_user, "disabled", "0")
+        set_text(admin_user, "scope", "user")
+        set_text(admin_user, "shell", "/bin/sh")
+        set_text(admin_user, "password", password_hash or "*")
+        set_text(admin_user, "descr", "NoCloud administration user")
+
+        authorizedkeys = admin_user.find("authorizedkeys")
+        if keys:
+            encoded = base64.b64encode(("\n".join(keys) + "\n").encode()).decode()
+            set_text(admin_user, "authorizedkeys", encoded)
+        elif authorizedkeys is not None:
+            admin_user.remove(authorizedkeys)
 
         admins = None
         for group in system.findall("group"):
@@ -230,11 +254,17 @@ def update_config(user_data, network_data, device):
         if user_uid not in [item.text for item in admins.findall("member")]:
             ET.SubElement(admins, "member").text = user_uid
 
-        ssh = ensure(system, "ssh")
-        set_text(ssh, "group", "admins")
+    ssh = ensure(system, "ssh")
+    set_text(ssh, "group", "admins")
+    for tag in ("permitrootlogin", "passwordauth"):
+        node = ssh.find(tag)
+        if node is not None:
+            ssh.remove(node)
+    enabled = ssh.find("enabled")
+    if keys:
         set_text(ssh, "enabled", "enabled")
-        set_text(ssh, "permitrootlogin", "0")
-        set_text(ssh, "passwordauth", "0")
+    elif enabled is not None:
+        ssh.remove(enabled)
 
     backup_dir = CONFIG.parent / "backup"
     backup_dir.mkdir(parents=True, exist_ok=True)
@@ -247,11 +277,11 @@ def update_config(user_data, network_data, device):
     os.chmod(tmp_name, 0o600)
     os.replace(tmp_name, CONFIG)
 
-    if keys:
+    if credentials_present:
         SUDOERS_DIR.mkdir(parents=True, exist_ok=True, mode=0o750)
-        sudoers_file = SUDOERS_DIR / ssh_username
+        sudoers_file = SUDOERS_DIR / admin_username
         sudoers_file.write_text(
-            f"{ssh_username} ALL=(ALL) NOPASSWD: ALL\n",
+            f"{admin_username} ALL=(ALL) NOPASSWD: ALL\n",
             encoding="utf-8",
         )
         os.chmod(sudoers_file, 0o440)

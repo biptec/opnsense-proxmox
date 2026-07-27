@@ -185,6 +185,18 @@ variable "ssh_public_key_path" {
   default     = null
 }
 
+variable "cloudinit_password" {
+  description = "Optional password for cloudinit_username. Proxmox hashes it before placing it in NoCloud data; OpenTofu state can still contain the sensitive input."
+  type        = string
+  default     = null
+  sensitive   = true
+
+  validation {
+    condition     = var.cloudinit_password == null || length(trimspace(var.cloudinit_password)) > 0
+    error_message = "cloudinit_password must be null or a non-empty password."
+  }
+}
+
 variable "cores" {
   description = "Number of virtual CPU cores assigned to the VM."
   type        = number
@@ -566,7 +578,7 @@ variable "disk_speed" {
 }
 
 variable "cloudinit_username" {
-  description = "Key-only administrative user created by the OPNsense NoCloud bootstrap."
+  description = "Optional administrative user created when a Cloud-Init password or SSH key is supplied."
   type        = string
   default     = "proxmox"
 

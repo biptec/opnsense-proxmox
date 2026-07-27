@@ -11,7 +11,7 @@ The project keeps environment-specific settings outside the base image and suppo
 - import the source image into the selected VM storage;
 - let Proxmox allocate the VM ID and management MAC automatically;
 - configure CPU, memory, system disk, bridge, VLAN and additional NICs;
-- pass hostname, management IP, gateway, DNS and an administrative SSH key through NoCloud;
+- pass hostname, management IP, gateway, DNS and optional administrative credentials through NoCloud;
 - enable QEMU Guest Agent integration for Proxmox by default;
 
 ## Requirements
@@ -139,17 +139,22 @@ The value may be increased but must not be smaller than the virtual size of the 
 
 The VM resource is named `proxmox_virtual_environment_vm.opnsense`. A `moved` block migrates the previous state address `proxmox_virtual_environment_vm.firewall` without destroying or recreating the VM.
 
-## SSH administration
+## Administrative access
 
-When `ssh_public_key_path` is set, the NoCloud bootstrap creates the user named by `cloudinit_username`. The default is `proxmox`. The account:
+The NoCloud bootstrap creates `cloudinit_username` only when at least one credential is supplied. The password and SSH key are independent:
 
-- accepts only the supplied SSH public key;
-- has no usable password;
-- receives administrative privileges through `sudo`;
-- does not enable SSH login for root;
-- does not disable the OPNsense firewall.
+| Password | SSH key | Result |
+| --- | --- | --- |
+| set | omitted | WebUI access; SSH remains disabled |
+| omitted | set | key-only SSH access; no password login |
+| set | set | WebUI access and key-only SSH access |
+| omitted | omitted | no remote administrative account is created |
 
-The username remains configurable and is not embedded in the image.
+The created user belongs to the OPNsense `admins` group and receives administrative `sudo` access. Root is disabled in OPNsense local authentication, preventing root login to WebUI and API. The operating-system root account remains available through the trusted Proxmox console for recovery.
+
+SSH is enabled only when `ssh_public_key_path` is set. Root SSH login and SSH password authentication remain disabled. The username is configurable and is not embedded in the image.
+
+`cloudinit_password` is sensitive and should be supplied through a gitignored `*.auto.tfvars` file or the `TF_VAR_cloudinit_password` environment variable. OpenTofu marks the variable as sensitive, but its state can still contain the original password and must be protected accordingly.
 
 ## QEMU Guest Agent
 
@@ -180,6 +185,8 @@ The provided `.gitignore` excludes these files. State can still contain sensitiv
 - `cloudinit_datastore = null`: `vm_datastore` is used;
 - `disk_size_gb = 21`;
 - `cloudinit_username = "proxmox"`;
+- `cloudinit_password = null`: no WebUI password is provisioned;
+- `ssh_public_key_path = null`: SSH remains disabled;
 - `qemu_agent_enabled = true`;
 - one VirtIO management NIC is created; extra NICs are optional.
 
