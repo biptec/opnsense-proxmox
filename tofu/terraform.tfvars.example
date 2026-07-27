@@ -33,9 +33,10 @@ management_gateway = "10.200.0.1"
 dns_servers = ["1.1.1.1"]
 dns_domain  = "example.net"
 
-# Optional key-only administrative SSH user created by the OPNsense bootstrap.
-# Omit ssh_public_key_path to leave SSH disabled.
+# Optional administrative account. Password and SSH key are independent.
+# Store the real password in a gitignored *.auto.tfvars file or TF_VAR variable.
 # cloudinit_username  = "proxmox"
+# cloudinit_password  = "replace-with-a-strong-password"
 # ssh_public_key_path = "./id_ed25519.pub"
 
 # Optional VM hardware and lifecycle settings.
