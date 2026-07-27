@@ -25,12 +25,13 @@ The project keeps environment-specific settings outside the base image and suppo
 ## Repository files
 
 ```text
-main.tf                    VM and image import configuration
-variables.tf               Inputs, defaults, validation and descriptions
-outputs.tf                 VM ID, management IP and source image ID
-versions.tf                OpenTofu and provider requirements
-terraform.tfvars.example   Non-secret configuration example
-token.auto.tfvars.example  API token example
+tofu/                      OpenTofu deployment configuration and examples
+  main.tf                  VM and image import configuration
+  variables.tf             Inputs, defaults, validation and descriptions
+  outputs.tf               VM ID, management IP and source image ID
+  versions.tf              OpenTofu and provider requirements
+  terraform.tfvars.example Non-secret configuration example
+  token.auto.tfvars.example API token example
 guest/nocloud-bootstrap/   Guest-side NoCloud package and tests
 image/build.sh             Reproducible Proxmox QCOW2 build entrypoint
 ```
@@ -40,11 +41,11 @@ image/build.sh             Reproducible Proxmox QCOW2 build entrypoint
 Copy the examples and add local values:
 
 ```sh
-cp terraform.tfvars.example terraform.tfvars
-cp token.auto.tfvars.example token.auto.tfvars
+cp tofu/terraform.tfvars.example tofu/terraform.tfvars
+cp tofu/token.auto.tfvars.example tofu/token.auto.tfvars
 ```
 
-Keep the API token outside `terraform.tfvars`:
+Keep the API token outside `tofu/terraform.tfvars`:
 
 ```hcl
 proxmox_api_token = "user@realm!token-id=token-secret"
@@ -53,11 +54,11 @@ proxmox_api_token = "user@realm!token-id=token-secret"
 Then initialise and review the deployment:
 
 ```sh
-tofu init
-tofu fmt -check
-tofu validate
-tofu plan
-tofu apply
+tofu -chdir=tofu init
+tofu -chdir=tofu fmt -check
+tofu -chdir=tofu validate
+tofu -chdir=tofu plan
+tofu -chdir=tofu apply
 ```
 
 ## Build the OPNsense image
@@ -110,7 +111,7 @@ The existing import file remains outside OpenTofu management and is not deleted 
 
 ## Configurable VM hardware
 
-All VM values explicitly managed by this configuration are exposed as variables rather than fixed literals in `main.tf`. This includes:
+All VM values explicitly managed by this configuration are exposed as variables rather than fixed literals in `tofu/main.tf`. This includes:
 
 - VM description, tags, power state, boot behaviour, BIOS, machine type, protection, pool, hotplug and lifecycle settings;
 - QEMU guest agent settings, including optional IP waiting;
@@ -121,7 +122,7 @@ All VM values explicitly managed by this configuration are exposed as variables 
 - management and additional NIC model, VLAN, firewall, MTU, queues, rate limit and trunk settings;
 - guest OS type and serial console device.
 
-Defaults are declared in `variables.tf`. Override only the required values in `terraform.tfvars`; see `terraform.tfvars.example` for common examples.
+Defaults are declared in `tofu/variables.tf`. Override only the required values in `tofu/terraform.tfvars`; see `tofu/terraform.tfvars.example` for common examples.
 
 ## System disk size
 
@@ -182,4 +183,4 @@ The provided `.gitignore` excludes these files. State can still contain sensitiv
 - `qemu_agent_enabled = true`;
 - one VirtIO management NIC is created; extra NICs are optional.
 
-Review `terraform.tfvars.example` and every variable description before applying the configuration to a new environment.
+Review `tofu/terraform.tfvars.example` and every variable description before applying the configuration to a new environment.
