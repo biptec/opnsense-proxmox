@@ -33,15 +33,43 @@ management_gateway = "10.200.0.1"
 dns_servers = ["1.1.1.1"]
 dns_domain  = "example.net"
 
-# Optional post-deployment SSH and API readiness verification.
-wait_for_api = false
-# ssh_public_key_path  = "./id_ed25519.pub"
-# ssh_private_key_path = "./id_ed25519"
+# Optional key-only administrative SSH user created by the OPNsense bootstrap.
+# Omit ssh_public_key_path to leave SSH disabled.
+# cloudinit_username  = "proxmox"
+# ssh_public_key_path = "./id_ed25519.pub"
 
-# Optional resource settings.
+# Optional VM hardware and lifecycle settings.
+# vm_description       = "Managed by OpenTofu"
+# vm_tags              = ["opnsense", "managed"]
+# vm_started           = true
+# vm_on_boot           = true
+# vm_stop_on_destroy   = true
+# vm_acpi              = true
+# vm_bios              = "seabios"
+# vm_machine           = "q35"
+# vm_scsi_hardware     = "virtio-scsi-single"
+# vm_boot_order        = ["scsi0"]
+# vm_protection        = false
+# vm_reboot            = false
+# vm_hotplug           = "network,disk,usb"
+# qemu_agent_enabled    = true
+# qemu_agent_type       = "virtio"
+# qemu_agent_wait_for_ip = { disabled = true, ipv4 = false, ipv6 = false }
 # cores                = 4
+# cpu_type             = "host"
+# cpu_sockets          = 1
+# cpu_numa             = false
 # memory_mb            = 4096
-# disk_size_gb         = 20
-# additional_nics      = []
-# api_scheme           = "https"
-# api_credentials_path = "./bootstrap-api.json"
+# memory_floating_mb   = 0
+# disk_interface       = "scsi0"
+# disk_size_gb         = 21
+# disk_discard         = "on"
+# disk_ssd             = true
+# network_model         = "virtio"
+# management_nic_enabled = true
+# management_nic_firewall = false
+# operating_system_type = "other"
+# serial_device_enabled = true
+# serial_device         = "socket"
+# cloudinit_interface    = "ide2"
+# additional_nics        = []

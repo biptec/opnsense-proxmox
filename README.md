@@ -11,27 +11,28 @@ The project keeps environment-specific settings outside the base image and suppo
 - import the source image into the selected VM storage;
 - let Proxmox allocate the VM ID and management MAC automatically;
 - configure CPU, memory, system disk, bridge, VLAN and additional NICs;
-- pass hostname, management IP, gateway, DNS and SSH keys through NoCloud;
-- optionally wait for the first-boot bootstrap and verify the OPNsense API.
+- pass hostname, management IP, gateway, DNS and an administrative SSH key through NoCloud;
+- enable QEMU Guest Agent integration for Proxmox by default;
 
 ## Requirements
 
 - OpenTofu 1.12 or newer;
 - Proxmox VE API access;
 - `bpg/proxmox` provider 0.111.1;
-- an OPNsense image containing the NoCloud bootstrap integration;
-- `ssh`, `curl` and Python 3 when `wait_for_api = true`.
+- an OPNsense build environment with `/usr/tools` and `/usr/plugins` when producing a new image;
+- the guest package in `guest/nocloud-bootstrap`, built together with `os-qemu-guest-agent`.
 
 ## Repository files
 
 ```text
-main.tf                    VM, image import and optional readiness check
+main.tf                    VM and image import configuration
 variables.tf               Inputs, defaults, validation and descriptions
 outputs.tf                 VM ID, management IP and source image ID
 versions.tf                OpenTofu and provider requirements
 terraform.tfvars.example   Non-secret configuration example
 token.auto.tfvars.example  API token example
-scripts/wait-for-api.sh    Optional SSH and API readiness verification
+guest/nocloud-bootstrap/   Guest-side NoCloud package and tests
+image/build.sh             Reproducible Proxmox QCOW2 build entrypoint
 ```
 
 ## Quick start
@@ -59,6 +60,32 @@ tofu plan
 tofu apply
 ```
 
+## Build the OPNsense image
+
+The repository contains both sides of the deployment contract. OpenTofu sends NoCloud data from the Proxmox side, while `os-nocloud-bootstrap` consumes it inside OPNsense.
+
+Build the QCOW2 on the OPNsense build host:
+
+```sh
+./image/build.sh
+```
+
+The wrapper calls the OPNsense custom-image pipeline with:
+
+```sh
+make -C /usr/tools custom-vm,qcow2,20G,never,proxmox \
+  ADDITIONS="os-qemu-guest-agent /path/to/opnsense-proxmox/guest/nocloud-bootstrap"
+```
+
+The guest package installs:
+
+```text
+/usr/local/opnsense/scripts/boot/nocloud_bootstrap.py
+/usr/local/etc/rc.syshook.d/early/20-nocloud-bootstrap
+```
+
+The source remains in this repository; it is not stored in the OPNsense core fork.
+
 ## Image source modes
 
 ### Upload a local image
@@ -81,26 +108,57 @@ image_file_id = "local:import/OPNsense.qcow2"
 
 The existing import file remains outside OpenTofu management and is not deleted by this configuration.
 
+## Configurable VM hardware
+
+All VM values explicitly managed by this configuration are exposed as variables rather than fixed literals in `main.tf`. This includes:
+
+- VM description, tags, power state, boot behaviour, BIOS, machine type, protection, pool, hotplug and lifecycle settings;
+- QEMU guest agent settings, including optional IP waiting;
+- CPU type, sockets, cores, flags, NUMA, affinity, limits and units;
+- dedicated, balloon, hugepage and shared-memory settings;
+- system-disk interface, size, cache, discard, I/O thread, queues, replication, SSD flag and optional I/O limits;
+- Cloud-Init datastore, interface, type, upgrade policy and username;
+- management and additional NIC model, VLAN, firewall, MTU, queues, rate limit and trunk settings;
+- guest OS type and serial console device.
+
+Defaults are declared in `variables.tf`. Override only the required values in `terraform.tfvars`; see `terraform.tfvars.example` for common examples.
+
 ## System disk size
 
-The provider otherwise defaults to an 8 GiB disk during creation. The supplied OPNsense image uses a 20 GiB virtual disk, so the configuration defaults to:
+The provider otherwise defaults to an 8 GiB disk during creation. The current OPNsense image has a virtual size of approximately `20.254 GiB`, so the smallest whole-GiB value accepted by Proxmox is:
 
 ```hcl
-disk_size_gb = 20
+disk_size_gb = 21
 ```
 
 The value may be increased but must not be smaller than the virtual size of the source image. Proxmox does not support shrinking disks during import.
 
-## Optional API readiness check
 
-Set `wait_for_api = true` and provide matching SSH key paths to:
+## Resource address migration
 
-1. wait for SSH after first boot;
-2. read `/conf/bootstrap-api.json` without printing its contents;
-3. perform an authenticated OPNsense API request;
-4. save the credentials locally with mode `0600`.
+The VM resource is named `proxmox_virtual_environment_vm.opnsense`. A `moved` block migrates the previous state address `proxmox_virtual_environment_vm.firewall` without destroying or recreating the VM.
 
-The check is disabled by default.
+## SSH administration
+
+When `ssh_public_key_path` is set, the NoCloud bootstrap creates the user named by `cloudinit_username`. The default is `proxmox`. The account:
+
+- accepts only the supplied SSH public key;
+- has no usable password;
+- receives administrative privileges through `sudo`;
+- does not enable SSH login for root;
+- does not disable the OPNsense firewall.
+
+The username remains configurable and is not embedded in the image.
+
+## QEMU Guest Agent
+
+QEMU Guest Agent is enabled in both layers: the OPNsense image starts the agent, and the Proxmox VM configuration exposes the `virtio` guest-agent channel. OpenTofu does not wait for an IP address by default, so agent startup cannot hold `apply` open.
+
+## Post-deployment verification
+
+OpenTofu finishes after Proxmox creates and starts the VM. It does not attempt SSH access or an OPNsense API readiness check. Verify the first boot and bootstrap result manually through the Proxmox console.
+
+A successful `apply` confirms that the requested Proxmox resources were created; it does not prove that every guest service is ready.
 
 ## Sensitive and local files
 
@@ -110,7 +168,6 @@ Do not commit:
 - `terraform.tfvars`;
 - OpenTofu state;
 - private SSH keys;
-- `bootstrap-api.json`;
 - QCOW2 or raw image files.
 
 The provided `.gitignore` excludes these files. State can still contain sensitive resource data, so store it in an appropriately protected backend.
@@ -120,8 +177,9 @@ The provided `.gitignore` excludes these files. State can still contain sensitiv
 - `vm_id = null`: Proxmox allocates the next free ID;
 - `management_mac = null`: Proxmox generates a MAC address;
 - `cloudinit_datastore = null`: `vm_datastore` is used;
-- `disk_size_gb = 20`;
-- `wait_for_api = false`;
+- `disk_size_gb = 21`;
+- `cloudinit_username = "proxmox"`;
+- `qemu_agent_enabled = true`;
 - one VirtIO management NIC is created; extra NICs are optional.
 
 Review `terraform.tfvars.example` and every variable description before applying the configuration to a new environment.
