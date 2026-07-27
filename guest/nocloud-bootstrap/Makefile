@@ -1,5 +1,5 @@
 PLUGIN_NAME=            nocloud-bootstrap
-PLUGIN_VERSION=         1.1
+PLUGIN_VERSION=         1.2
 PLUGIN_COMMENT=         NoCloud bootstrap integration for OPNsense virtual machines
 PLUGIN_DEPENDS=         sudo
 PLUGIN_MAINTAINER=      ted.welch@biptec.com

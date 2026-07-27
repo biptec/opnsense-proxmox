@@ -11,14 +11,17 @@ The project keeps environment-specific settings outside the base image and suppo
 - import the source image into the selected VM storage;
 - let Proxmox allocate the VM ID and management MAC automatically;
 - configure CPU, memory, system disk, bridge, VLAN and additional NICs;
-- pass hostname, management IP, gateway, DNS and optional administrative credentials through NoCloud;
+- preserve image networking, request DHCP, or apply a static management IPv4 configuration through NoCloud;
+- apply hostname, DNS and optional administrative credentials independently from the network mode;
 - enable QEMU Guest Agent integration for Proxmox by default;
 
 ## Requirements
 
 - OpenTofu 1.12 or newer;
-- Proxmox VE API access;
+- Proxmox VE API access, including `VM.GuestAgent.Audit` on the deployed VM;
 - `bpg/proxmox` provider 0.111.1;
+- `hashicorp/external` provider 2.4.0;
+- Python 3 on the OpenTofu runner for reading the raw Guest Agent network response;
 - an OPNsense build environment with `/usr/tools` and `/usr/plugins` when producing a new image;
 - the guest package in `guest/nocloud-bootstrap`, built together with `os-qemu-guest-agent`.
 
@@ -28,10 +31,11 @@ The project keeps environment-specific settings outside the base image and suppo
 tofu/                      OpenTofu deployment configuration and examples
   main.tf                  VM and image import configuration
   variables.tf             Inputs, defaults, validation and descriptions
-  outputs.tf               VM ID, guest-reported IP addresses and source image ID
+  outputs.tf               VM ID, management IP/netmask and source image ID
   versions.tf              OpenTofu and provider requirements
   terraform.tfvars.example Non-secret configuration example
   token.auto.tfvars.example API token example
+  scripts/                  Local helpers used by OpenTofu
 guest/nocloud-bootstrap/   Guest-side NoCloud package and tests
 image/build.sh             Reproducible Proxmox QCOW2 build entrypoint
 ```
@@ -109,6 +113,40 @@ image_file_id = "local:import/OPNsense.qcow2"
 
 The existing import file remains outside OpenTofu management and is not deleted by this configuration.
 
+## Management IPv4 modes
+
+`management_ipv4` is optional and uses a typed mode instead of overloading one string with unrelated meanings.
+
+Keep the IPv4 configuration already stored in the image:
+
+```hcl
+management_ipv4 = {
+  mode = "preserve"
+}
+```
+
+Request DHCP for the management interface:
+
+```hcl
+management_ipv4 = {
+  mode = "dhcp"
+}
+```
+
+Apply a static address and optional gateway:
+
+```hcl
+management_ipv4 = {
+  mode    = "static"
+  address = "10.200.0.50/24"
+  gateway = "10.200.0.1"
+}
+```
+
+`preserve` is the default. In this mode OpenTofu omits `ipconfig0`; Proxmox therefore generates no physical network entry in `network-config`, and the bootstrap leaves the image's interface address, netmask and gateway unchanged. Hostname, DNS and administrative credentials are still processed.
+
+Configurations created before this change must replace `management_address` and `management_gateway` with the `management_ipv4` object before the next `plan`.
+
 ## Configurable VM hardware
 
 All VM values explicitly managed by this configuration are exposed as variables rather than fixed literals in `tofu/main.tf`. This includes:
@@ -162,17 +200,14 @@ The bootstrap is intentionally one-time. Changing `cloudinit_password` on an exi
 
 QEMU Guest Agent is enabled in both layers: the OPNsense image starts the agent, and the Proxmox VM configuration exposes the `virtio` guest-agent channel. By default, OpenTofu waits for the guest to report an IPv4 address before completing `apply`. Set `qemu_agent_wait_for_ip.disabled = true` to opt out.
 
-The IP outputs describe actual guest state reported through Proxmox rather than repeating Cloud-Init input:
+Only two management-network outputs are exposed:
 
-- `management_ip`: IP portion of the first usable guest-reported IPv4 address;
-- `management_cidr`: the same address with its prefix;
-- `management_prefix_length`: numeric prefix length;
-- `management_netmask`: dotted-decimal IPv4 netmask;
-- `ipv4_addresses`: all usable IPv4 addresses as objects containing `interface`, `address`, `cidr`, `prefix_length` and `netmask`;
-- `ipv6_addresses`: all usable IPv6 addresses as objects containing `interface`, `address`, `cidr` and `prefix_length`;
-- `configured_management_ip`: IPv4 address requested through Cloud-Init.
+- `management_ip`: actual IPv4 address reported for the management NIC;
+- `management_netmask`: actual dotted-decimal netmask for that address.
 
-Loopback, link-local and unspecified addresses are excluded. Network information is returned in separate fields, so consumers do not need to parse CIDR strings. This also works when the guest obtains its address through DHCP or retains an address already present in the source image.
+The management NIC is matched by MAC address, not by assuming that the first global address belongs to it. The `bpg/proxmox` provider currently drops the prefix returned by QEMU Guest Agent, so `tofu/scripts/read-management-network.py` reads the raw Proxmox API response and preserves the prefix before calculating the netmask. It never prints the API token. The helper reads authentication from `PROXMOX_VE_API_TOKEN`, `PM_VE_API_TOKEN`, `TF_VAR_proxmox_api_token`, or the standard gitignored `tofu/token.auto.tfvars` file.
+
+This works in `preserve`, `dhcp` and `static` modes. If the VM is stopped, the agent is disabled, or the management NIC has no usable IPv4 address, both outputs are `null`.
 
 ## Post-deployment verification
 
@@ -196,6 +231,7 @@ The provided `.gitignore` excludes these files. State can still contain sensitiv
 
 - `vm_id = null`: Proxmox allocates the next free ID;
 - `management_mac = null`: Proxmox generates a MAC address;
+- `management_ipv4.mode = "preserve"`: keep IPv4 settings stored in the image;
 - `cloudinit_datastore = null`: `vm_datastore` is used;
 - `disk_size_gb = 21`;
 - `cloudinit_username = "proxmox"`;

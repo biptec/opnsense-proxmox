@@ -5,38 +5,19 @@ output "vm_id" {
 }
 
 output "management_ip" {
-  description = "IP portion of the first usable IPv4 address reported by QEMU Guest Agent, or null when none is available."
-  value       = try(local.reported_ipv4_addresses[0].address, null)
-}
-
-output "management_cidr" {
-  description = "First usable IPv4 address reported by QEMU Guest Agent in CIDR notation."
-  value       = try(local.reported_ipv4_addresses[0].cidr, null)
-}
-
-output "management_prefix_length" {
-  description = "Prefix length of the first usable IPv4 address reported by QEMU Guest Agent."
-  value       = try(local.reported_ipv4_addresses[0].prefix_length, null)
+  description = "Actual IPv4 address of the management interface reported by QEMU Guest Agent."
+  value = (
+    try(data.external.management_network[0].result.management_ip, "") == "" ?
+    null : data.external.management_network[0].result.management_ip
+  )
 }
 
 output "management_netmask" {
-  description = "Dotted-decimal netmask of the first usable IPv4 address reported by QEMU Guest Agent."
-  value       = try(local.reported_ipv4_addresses[0].netmask, null)
-}
-
-output "ipv4_addresses" {
-  description = "Usable guest-reported IPv4 addresses with interface, address, CIDR, prefix length and netmask fields."
-  value       = local.reported_ipv4_addresses
-}
-
-output "ipv6_addresses" {
-  description = "Usable guest-reported IPv6 addresses with interface, address, CIDR and prefix length fields."
-  value       = local.reported_ipv6_addresses
-}
-
-output "configured_management_ip" {
-  description = "IPv4 address requested through Cloud-Init, without the CIDR prefix. This is configuration input, not guest-reported state."
-  value       = local.management_ip
+  description = "Actual dotted-decimal netmask of the management interface reported by QEMU Guest Agent."
+  value = (
+    try(data.external.management_network[0].result.management_netmask, "") == "" ?
+    null : data.external.management_network[0].result.management_netmask
+  )
 }
 
 output "source_image_file_id" {

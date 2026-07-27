@@ -1,6 +1,5 @@
 locals {
   # Keep repeated and mode-dependent values in one place.
-  management_ip          = split("/", var.management_address)[0]
   cloudinit_datastore_id = coalesce(var.cloudinit_datastore, var.vm_datastore)
 
   # Pre-hash the bootstrap password with a crypt format supported by both
@@ -10,55 +9,6 @@ locals {
   # Both modes produce the same Proxmox file ID consumed by disk.import_from.
   # local mode gets it from the upload resource; proxmox mode uses the supplied ID.
   source_image_file_id = var.image_source == "local" ? proxmox_virtual_environment_file.image[0].id : var.image_file_id
-
-  # Addresses are reported by QEMU Guest Agent after the guest has configured its
-  # interfaces. Preserve both the address and network information so callers do
-  # not need to parse CIDR strings themselves.
-  reported_ipv4_address_data = flatten([
-    for interface_index, interface_addresses in proxmox_virtual_environment_vm.opnsense.ipv4_addresses : [
-      for address in interface_addresses : {
-        interface = try(proxmox_virtual_environment_vm.opnsense.network_interface_names[interface_index], null)
-        address   = split("/", address)[0]
-        cidr      = strcontains(address, "/") ? address : "${address}/32"
-      }
-    ]
-  ])
-
-  reported_ipv4_addresses = distinct([
-    for item in local.reported_ipv4_address_data : {
-      interface     = item.interface
-      address       = item.address
-      cidr          = item.cidr
-      prefix_length = tonumber(split("/", item.cidr)[1])
-      netmask       = cidrnetmask(item.cidr)
-    }
-    if !startswith(item.address, "127.") &&
-    !startswith(item.address, "169.254.") &&
-    item.address != "0.0.0.0"
-  ])
-
-  reported_ipv6_address_data = flatten([
-    for interface_index, interface_addresses in proxmox_virtual_environment_vm.opnsense.ipv6_addresses : [
-      for address in interface_addresses : {
-        interface = try(proxmox_virtual_environment_vm.opnsense.network_interface_names[interface_index], null)
-        address   = split("/", address)[0]
-        cidr      = strcontains(address, "/") ? address : "${address}/128"
-      }
-    ]
-  ])
-
-  reported_ipv6_addresses = distinct([
-    for item in local.reported_ipv6_address_data : {
-      interface     = item.interface
-      address       = item.address
-      cidr          = item.cidr
-      prefix_length = tonumber(split("/", item.cidr)[1])
-    }
-    if item.address != "::1" &&
-    item.address != "::" &&
-    !startswith(lower(item.address), "fe80:")
-  ])
-
 }
 
 # Preserve the existing state address after renaming the resource to a name that
@@ -212,10 +162,13 @@ resource "proxmox_virtual_environment_vm" "opnsense" {
       }
     }
 
-    ip_config {
-      ipv4 {
-        address = var.management_address
-        gateway = var.management_gateway
+    dynamic "ip_config" {
+      for_each = var.management_ipv4.mode == "preserve" ? [] : [var.management_ipv4]
+      content {
+        ipv4 {
+          address = ip_config.value.mode == "dhcp" ? "dhcp" : ip_config.value.address
+          gateway = ip_config.value.mode == "static" ? ip_config.value.gateway : null
+        }
       }
     }
 
@@ -295,4 +248,24 @@ resource "proxmox_virtual_environment_vm" "opnsense" {
       device = var.serial_device
     }
   }
+}
+
+# The bpg/proxmox resource exposes guest IP addresses but currently drops the
+# prefix returned by QEMU Guest Agent. Read the raw API response so the netmask
+# remains correct for preserve, DHCP and static modes.
+data "external" "management_network" {
+  count = var.vm_started && var.qemu_agent_enabled ? 1 : 0
+
+  program = ["python3", "${path.module}/scripts/read-management-network.py"]
+
+  query = {
+    endpoint       = var.proxmox_endpoint
+    insecure       = tostring(var.proxmox_insecure)
+    node_name      = var.node_name
+    vm_id          = tostring(proxmox_virtual_environment_vm.opnsense.vm_id)
+    management_mac = proxmox_virtual_environment_vm.opnsense.network_device[0].mac_address
+    token_file     = "${path.module}/token.auto.tfvars"
+  }
+
+  depends_on = [proxmox_virtual_environment_vm.opnsense]
 }

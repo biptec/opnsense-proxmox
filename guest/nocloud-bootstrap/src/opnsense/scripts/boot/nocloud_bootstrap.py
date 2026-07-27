@@ -65,29 +65,37 @@ def interface_map():
 def select_network(network):
     nameservers = []
     search_domains = []
+    dns_configured = False
     selected = None
-    for item in network.get("config", []):
+    for item in network.get("config") or []:
         if not isinstance(item, dict):
             continue
         if item.get("type") == "nameserver":
+            dns_configured = True
             nameservers.extend(str(value) for value in item.get("address", []))
             search_domains.extend(str(value) for value in item.get("search", []))
-        if item.get("type") != "physical":
+        if item.get("type") != "physical" or selected is not None:
             continue
         for subnet in item.get("subnets", []):
-            if isinstance(subnet, dict) and subnet.get("type") == "static":
-                address = str(subnet.get("address", "")).strip()
-                netmask = str(subnet.get("netmask", "")).strip()
-                if address and "/" not in address and netmask:
-                    prefix = ipaddress.ip_network(f"0.0.0.0/{netmask}").prefixlen
-                    address = f"{address}/{prefix}"
-                selected = {
-                    "mac": str(item.get("mac_address", "")).lower(),
-                    "address": address,
-                    "gateway": str(subnet.get("gateway", "")),
-                }
-                break
-    return selected, nameservers, search_domains
+            if not isinstance(subnet, dict):
+                continue
+            subnet_type = str(subnet.get("type", "")).lower()
+            if subnet_type not in {"static", "dhcp", "dhcp4"}:
+                continue
+            mode = "dhcp" if subnet_type.startswith("dhcp") else "static"
+            address = str(subnet.get("address", "")).strip()
+            netmask = str(subnet.get("netmask", "")).strip()
+            if mode == "static" and address and "/" not in address and netmask:
+                prefix = ipaddress.ip_network(f"0.0.0.0/{netmask}").prefixlen
+                address = f"{address}/{prefix}"
+            selected = {
+                "mode": mode,
+                "mac": str(item.get("mac_address", "")).lower(),
+                "address": address,
+                "gateway": str(subnet.get("gateway", "")).strip(),
+            }
+            break
+    return selected, nameservers, search_domains, dns_configured
 
 
 def ensure(parent, tag):
@@ -103,15 +111,49 @@ def set_text(parent, tag, value):
     return node
 
 
+def remove_child(parent, tag):
+    node = parent.find(tag)
+    if node is not None:
+        parent.remove(node)
+
+
+def clear_management_gateway(root, lan):
+    remove_child(lan, "gateway")
+    opnsense = root.find("OPNsense")
+    if opnsense is None:
+        return
+    gateways = opnsense.find("Gateways")
+    if gateways is None:
+        return
+    for item in list(gateways.findall("gateway_item")):
+        if item.findtext("name") == "MGMT_GW" or item.findtext("interface") == "lan":
+            gateways.remove(item)
+
+
+def set_management_gateway(root, lan, gateway):
+    clear_management_gateway(root, lan)
+    if not gateway:
+        return
+    set_text(lan, "gateway", "MGMT_GW")
+    opnsense = ensure(root, "OPNsense")
+    gateways = ensure(opnsense, "Gateways")
+    for item in gateways.findall("gateway_item"):
+        if item.findtext("defaultgw") == "1":
+            set_text(item, "defaultgw", "0")
+    gateway_item = ET.SubElement(gateways, "gateway_item")
+    set_text(gateway_item, "disabled", "0")
+    set_text(gateway_item, "name", "MGMT_GW")
+    set_text(gateway_item, "descr", "Management gateway")
+    set_text(gateway_item, "interface", "lan")
+    set_text(gateway_item, "ipprotocol", "inet")
+    set_text(gateway_item, "gateway", gateway)
+    set_text(gateway_item, "defaultgw", "1")
+    set_text(gateway_item, "fargw", "0")
+    set_text(gateway_item, "monitor_disable", "1")
+
+
 def update_config(user_data, network_data, device):
-    selected, nameservers, search_domains = select_network(network_data)
-    if not selected:
-        raise ValueError("No static physical network found in network-config")
-    if not selected["mac"]:
-        raise ValueError("Management interface has no mac_address")
-    address = ipaddress.ip_interface(selected["address"])
-    if address.version != 4:
-        raise ValueError("Only IPv4 management addressing is supported")
+    selected, nameservers, search_domains, dns_configured = select_network(network_data)
 
     tree = ET.parse(CONFIG)
     root = tree.getroot()
@@ -128,47 +170,41 @@ def update_config(user_data, network_data, device):
         elif search_domains:
             set_text(system, "domain", search_domains[0])
 
-    set_text(lan, "enable", "1")
-    set_text(lan, "if", device)
-    set_text(lan, "ipaddr", str(address.ip))
-    set_text(lan, "subnet", str(address.network.prefixlen))
-    set_text(lan, "ipaddrv6", "")
-    set_text(lan, "subnetv6", "")
+    network_mode = "preserve"
+    configured_address = None
+    gateway = ""
+    if selected:
+        if not selected["mac"]:
+            raise ValueError("Management interface has no mac_address")
+        if not device:
+            raise ValueError(f"No interface matches management MAC {selected['mac']}")
+        network_mode = selected["mode"]
+        gateway = selected["gateway"]
+        set_text(lan, "enable", "1")
+        set_text(lan, "if", device)
+        if network_mode == "static":
+            configured_address = ipaddress.ip_interface(selected["address"])
+            if configured_address.version != 4:
+                raise ValueError("Only IPv4 management addressing is supported")
+            set_text(lan, "ipaddr", str(configured_address.ip))
+            set_text(lan, "subnet", str(configured_address.network.prefixlen))
+            set_management_gateway(root, lan, gateway)
+        elif network_mode == "dhcp":
+            set_text(lan, "ipaddr", "dhcp")
+            remove_child(lan, "subnet")
+            clear_management_gateway(root, lan)
 
-    if selected["gateway"]:
-        set_text(lan, "gateway", "MGMT_GW")
-        opnsense = ensure(root, "OPNsense")
-        gateways = ensure(opnsense, "Gateways")
-        gateway_item = None
-        for item in gateways.findall("gateway_item"):
-            if item.findtext("name") == "MGMT_GW" or item.findtext("interface") == "lan":
-                gateway_item = item
-                break
-        if gateway_item is None:
-            gateway_item = ET.SubElement(gateways, "gateway_item")
-        for item in gateways.findall("gateway_item"):
-            if item is not gateway_item and item.findtext("defaultgw") == "1":
-                set_text(item, "defaultgw", "0")
-        set_text(gateway_item, "disabled", "0")
-        set_text(gateway_item, "name", "MGMT_GW")
-        set_text(gateway_item, "descr", "Management gateway")
-        set_text(gateway_item, "interface", "lan")
-        set_text(gateway_item, "ipprotocol", "inet")
-        set_text(gateway_item, "gateway", selected["gateway"])
-        set_text(gateway_item, "defaultgw", "1")
-        set_text(gateway_item, "fargw", "0")
-        set_text(gateway_item, "monitor_disable", "1")
-
-    set_text(system, "dnsallowoverride", "0")
-    for node in list(system.findall("dnsserver")):
-        system.remove(node)
-    for value in nameservers:
-        try:
-            ipaddress.ip_address(value)
-        except ValueError:
-            continue
-        node = ET.SubElement(system, "dnsserver")
-        node.text = value
+    if dns_configured:
+        set_text(system, "dnsallowoverride", "0")
+        for node in list(system.findall("dnsserver")):
+            system.remove(node)
+        for value in nameservers:
+            try:
+                ipaddress.ip_address(value)
+            except ValueError:
+                continue
+            node = ET.SubElement(system, "dnsserver")
+            node.text = value
 
     keys = user_data.get("ssh_authorized_keys", user_data.get("ssh-authorized-keys", []))
     if not isinstance(keys, list):
@@ -286,7 +322,12 @@ def update_config(user_data, network_data, device):
         )
         os.chmod(sudoers_file, 0o440)
 
-    return address, selected["gateway"], nameservers
+    return {
+        "mode": network_mode,
+        "address": str(configured_address) if configured_address else None,
+        "gateway": gateway,
+        "dns_count": len(nameservers) if dns_configured else None,
+    }
 
 
 def source_directory():
@@ -308,17 +349,15 @@ def main():
         source, mounted = source_directory()
         user_data = load_yaml(source / "user-data")
         network_data = load_yaml(source / "network-config")
-        selected, _, _ = select_network(network_data)
-        if not selected:
-            log("no static management network in cidata; nothing to apply")
-            return 0
-        device = interface_map().get(selected["mac"])
-        if not device:
-            raise ValueError(f"No interface matches management MAC {selected['mac']}")
-        address, gateway, nameservers = update_config(user_data, network_data, device)
+        selected, _, _, _ = select_network(network_data)
+        device = interface_map().get(selected["mac"]) if selected else None
+        result = update_config(user_data, network_data, device)
         MARKER.write_text("completed\n", encoding="utf-8")
         os.chmod(MARKER, 0o600)
-        log(f"configured {device} with {address}; gateway={'set' if gateway else 'none'}; dns={len(nameservers)}")
+        network = result["address"] or result["mode"]
+        gateway = "set" if result["gateway"] else "none"
+        dns = "preserved" if result["dns_count"] is None else str(result["dns_count"])
+        log(f"bootstrap completed; network={network}; gateway={gateway}; dns={dns}")
         return 0
     except Exception as error:
         log(f"bootstrap failed: {error}")
