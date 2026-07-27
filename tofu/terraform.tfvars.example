@@ -23,9 +23,25 @@ vm_datastore = "local-vmdata01"
 # cloudinit_datastore = "local-vmdata01"
 
 # Management network. Omit management_mac to let Proxmox generate it.
-bridge             = "vmbr1"
-management_address = "10.200.0.50/24"
-management_gateway = "10.200.0.1"
+bridge = "vmbr1"
+
+# preserve is the safe default and keeps IPv4 settings already stored in the image.
+management_ipv4 = {
+  mode = "preserve"
+}
+
+# To request DHCP instead:
+# management_ipv4 = {
+#   mode = "dhcp"
+# }
+
+# To apply a static address instead:
+# management_ipv4 = {
+#   mode    = "static"
+#   address = "10.200.0.50/24"
+#   gateway = "10.200.0.1"
+# }
+
 # management_mac     = "02:00:00:00:50:01"
 # management_vlan_id = 100
 

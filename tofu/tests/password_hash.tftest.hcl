@@ -4,11 +4,10 @@ run "password_is_prehashed" {
   command = apply
 
   variables {
-    proxmox_endpoint   = "https://proxmox.example.invalid:8006/"
-    proxmox_api_token  = "test@pve!token=test-secret"
-    node_name          = "node1"
-    vm_datastore       = "local-lvm"
-    management_address = "10.0.0.2/24"
+    proxmox_endpoint  = "https://proxmox.example.invalid:8006/"
+    proxmox_api_token = "test@pve!token=test-secret"
+    node_name         = "node1"
+    vm_datastore      = "local-lvm"
 
     image_source       = "proxmox"
     image_file_id      = "local:import/OPNsense.qcow2"

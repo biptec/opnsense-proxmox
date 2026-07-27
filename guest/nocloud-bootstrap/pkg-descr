@@ -1,4 +1,5 @@
 Applies Proxmox NoCloud metadata to an OPNsense virtual machine during the
-first boot. It configures hostname, management networking, DNS and an optional
-administrative user with independent WebUI password and key-only SSH access.
-Root login remains disabled for WebUI, API and SSH.
+first boot. It can preserve the image network configuration, enable DHCP, or
+apply a static management address. Hostname, DNS and optional administrative
+credentials are processed independently from the selected network mode. Root
+login remains disabled for WebUI, API and SSH.

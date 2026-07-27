@@ -1,6 +1,5 @@
 locals {
   # Keep repeated and mode-dependent values in one place.
-  management_ip          = split("/", var.management_address)[0]
   cloudinit_datastore_id = coalesce(var.cloudinit_datastore, var.vm_datastore)
 
   # Pre-hash the bootstrap password with a crypt format supported by both
@@ -163,10 +162,13 @@ resource "proxmox_virtual_environment_vm" "opnsense" {
       }
     }
 
-    ip_config {
-      ipv4 {
-        address = var.management_address
-        gateway = var.management_gateway
+    dynamic "ip_config" {
+      for_each = var.management_ipv4.mode == "preserve" ? [] : [var.management_ipv4]
+      content {
+        ipv4 {
+          address = ip_config.value.mode == "dhcp" ? "dhcp" : ip_config.value.address
+          gateway = ip_config.value.mode == "static" ? ip_config.value.gateway : null
+        }
       }
     }
 
@@ -246,4 +248,24 @@ resource "proxmox_virtual_environment_vm" "opnsense" {
       device = var.serial_device
     }
   }
+}
+
+# The bpg/proxmox resource exposes guest IP addresses but currently drops the
+# prefix returned by QEMU Guest Agent. Read the raw API response so the netmask
+# remains correct for preserve, DHCP and static modes.
+data "external" "management_network" {
+  count = var.vm_started && var.qemu_agent_enabled ? 1 : 0
+
+  program = ["python3", "${path.module}/scripts/read-management-network.py"]
+
+  query = {
+    endpoint       = var.proxmox_endpoint
+    insecure       = tostring(var.proxmox_insecure)
+    node_name      = var.node_name
+    vm_id          = tostring(proxmox_virtual_environment_vm.opnsense.vm_id)
+    management_mac = proxmox_virtual_environment_vm.opnsense.network_device[0].mac_address
+    token_file     = "${path.module}/token.auto.tfvars"
+  }
+
+  depends_on = [proxmox_virtual_environment_vm.opnsense]
 }

@@ -151,20 +151,38 @@ variable "management_vlan_id" {
   }
 }
 
-variable "management_address" {
-  description = "Static IPv4 management address in CIDR notation passed through the Proxmox NoCloud network configuration."
-  type        = string
+variable "management_ipv4" {
+  description = "Management IPv4 policy. preserve keeps the image configuration, dhcp enables DHCP, and static applies address and optional gateway."
+  type = object({
+    mode    = optional(string, "preserve")
+    address = optional(string)
+    gateway = optional(string)
+  })
+  default = {}
 
   validation {
-    condition     = can(cidrhost(var.management_address, 0)) && !strcontains(var.management_address, ":")
-    error_message = "management_address must be a valid IPv4 CIDR, for example 10.200.0.50/24."
+    condition     = contains(["preserve", "dhcp", "static"], var.management_ipv4.mode)
+    error_message = "management_ipv4.mode must be preserve, dhcp, or static."
   }
-}
 
-variable "management_gateway" {
-  description = "Optional IPv4 default gateway for the management interface. Null creates no default route."
-  type        = string
-  default     = null
+  validation {
+    condition = (
+      var.management_ipv4.mode == "static" ?
+      var.management_ipv4.address != null &&
+      can(cidrhost(var.management_ipv4.address, 0)) &&
+      !strcontains(var.management_ipv4.address, ":") :
+      var.management_ipv4.address == null && var.management_ipv4.gateway == null
+    )
+    error_message = "static mode requires an IPv4 CIDR address; preserve and dhcp modes must not set address or gateway."
+  }
+
+  validation {
+    condition = (
+      var.management_ipv4.gateway == null ||
+      (var.management_ipv4.mode == "static" && can(cidrhost("${var.management_ipv4.gateway}/32", 0)) && !strcontains(var.management_ipv4.gateway, ":"))
+    )
+    error_message = "management_ipv4.gateway must be null or an IPv4 address used only with static mode."
+  }
 }
 
 variable "dns_servers" {
@@ -411,15 +429,15 @@ variable "qemu_agent_type" {
 }
 
 variable "qemu_agent_wait_for_ip" {
-  description = "QEMU agent IP wait settings. The default keeps the agent enabled without blocking apply while the guest boots."
+  description = "QEMU agent IP wait settings. By default apply waits for a guest-reported IPv4 address so IP outputs represent actual guest state."
   type = object({
     disabled = optional(bool)
     ipv4     = optional(bool)
     ipv6     = optional(bool)
   })
   default = {
-    disabled = true
-    ipv4     = false
+    disabled = false
+    ipv4     = true
     ipv6     = false
   }
 }

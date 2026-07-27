@@ -5,8 +5,19 @@ output "vm_id" {
 }
 
 output "management_ip" {
-  description = "Management IPv4 address without the CIDR prefix."
-  value       = local.management_ip
+  description = "Actual IPv4 address of the management interface reported by QEMU Guest Agent."
+  value = (
+    try(data.external.management_network[0].result.management_ip, "") == "" ?
+    null : data.external.management_network[0].result.management_ip
+  )
+}
+
+output "management_netmask" {
+  description = "Actual dotted-decimal netmask of the management interface reported by QEMU Guest Agent."
+  value = (
+    try(data.external.management_network[0].result.management_netmask, "") == "" ?
+    null : data.external.management_network[0].result.management_netmask
+  )
 }
 
 output "source_image_file_id" {
