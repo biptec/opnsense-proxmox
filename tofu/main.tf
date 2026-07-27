@@ -3,6 +3,10 @@ locals {
   management_ip          = split("/", var.management_address)[0]
   cloudinit_datastore_id = coalesce(var.cloudinit_datastore, var.vm_datastore)
 
+  # Pre-hash the bootstrap password with a crypt format supported by both
+  # Proxmox and OPNsense. This avoids depending on the host's crypt default.
+  cloudinit_password_hash = var.cloudinit_password == null ? null : bcrypt(var.cloudinit_password)
+
   # Both modes produce the same Proxmox file ID consumed by disk.import_from.
   # local mode gets it from the upload resource; proxmox mode uses the supplied ID.
   source_image_file_id = var.image_source == "local" ? proxmox_virtual_environment_file.image[0].id : var.image_file_id
@@ -170,7 +174,7 @@ resource "proxmox_virtual_environment_vm" "opnsense" {
       for_each = var.cloudinit_password == null && var.ssh_public_key_path == null ? [] : [1]
       content {
         username = var.cloudinit_username
-        password = var.cloudinit_password
+        password = local.cloudinit_password_hash
         keys     = var.ssh_public_key_path == null ? null : [trimspace(file(var.ssh_public_key_path))]
       }
     }
@@ -210,6 +214,11 @@ resource "proxmox_virtual_environment_vm" "opnsense" {
   }
 
   lifecycle {
+    # bcrypt uses a random salt. The password is consumed only during the
+    # one-time bootstrap, so ignore the newly generated hash after creation.
+    # Recreate the VM to apply a changed bootstrap password.
+    ignore_changes = [initialization[0].user_account[0].password]
+
     precondition {
       condition = (
         var.image_source != "local" ||

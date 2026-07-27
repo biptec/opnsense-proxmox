@@ -12,11 +12,12 @@ from pathlib import Path
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = PLUGIN_ROOT / "src/opnsense/scripts/boot/nocloud_bootstrap.py"
 PASSWORD_HASH = "$5$testsalt$zs8VOlTYX00XBVLAUSYKi/58OMU9LMjCkjZtiASPsK5"
+BCRYPT_PASSWORD_HASH = "$2a$05$lMbqQEJ0KY91rm.rVB.XQu/R6dvSPPzcJx/KAB2B/YnjkDVV6nk5m"
 SSH_KEY = "ssh-ed25519 AAAATEST deployment"
 
 
 class NoCloudBootstrapTest(unittest.TestCase):
-    def run_bootstrap(self, *, password=False, ssh_key=False):
+    def run_bootstrap(self, *, password=False, password_hash=PASSWORD_HASH, ssh_key=False):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         root = Path(temporary.name)
@@ -59,7 +60,7 @@ class NoCloudBootstrapTest(unittest.TestCase):
         if password or ssh_key:
             user_data.append("user: proxmox")
         if password:
-            user_data.append(f"password: '{PASSWORD_HASH}'")
+            user_data.append(f"password: '{password_hash}'")
         if ssh_key:
             user_data.extend(["ssh_authorized_keys:", f"  - {SSH_KEY}"])
         (source / "user-data").write_text("\n".join(user_data) + "\n", encoding="utf-8")
@@ -130,6 +131,14 @@ config:
     def test_password_only_leaves_ssh_disabled(self):
         system, marker, sudoers = self.run_bootstrap(password=True)
         self.assert_admin_user(system, sudoers, PASSWORD_HASH, False)
+        self.assertTrue(marker.exists())
+
+    def test_bcrypt_password_is_preserved(self):
+        system, marker, sudoers = self.run_bootstrap(
+            password=True,
+            password_hash=BCRYPT_PASSWORD_HASH,
+        )
+        self.assert_admin_user(system, sudoers, BCRYPT_PASSWORD_HASH, False)
         self.assertTrue(marker.exists())
 
     def test_key_only_creates_locked_password(self):

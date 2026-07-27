@@ -186,7 +186,7 @@ variable "ssh_public_key_path" {
 }
 
 variable "cloudinit_password" {
-  description = "Optional password for cloudinit_username. Proxmox hashes it before placing it in NoCloud data; OpenTofu state can still contain the sensitive input."
+  description = "Optional one-time bootstrap password for cloudinit_username. OpenTofu converts it to bcrypt before sending it to Proxmox. Recreate the VM to apply a changed password. Protect tfvars and saved plan files containing the plaintext input."
   type        = string
   default     = null
   sensitive   = true
