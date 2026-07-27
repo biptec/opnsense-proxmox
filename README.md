@@ -154,7 +154,9 @@ The created user belongs to the OPNsense `admins` group and receives administrat
 
 SSH is enabled only when `ssh_public_key_path` is set. Root SSH login and SSH password authentication remain disabled. The username is configurable and is not embedded in the image.
 
-`cloudinit_password` is sensitive and should be supplied through a gitignored `*.auto.tfvars` file or the `TF_VAR_cloudinit_password` environment variable. OpenTofu marks the variable as sensitive, but its state can still contain the original password and must be protected accordingly.
+`cloudinit_password` is sensitive and should be supplied through a gitignored `*.auto.tfvars` file or the `TF_VAR_cloudinit_password` environment variable. OpenTofu converts the plaintext to a bcrypt crypt hash before sending it to Proxmox, so the generated NoCloud data uses a format supported by OPNsense instead of depending on the Proxmox host's default hashing algorithm. Protect tfvars and saved plan files because they can contain the plaintext input.
+
+The bootstrap is intentionally one-time. Changing `cloudinit_password` on an existing VM does not rotate the OPNsense password; recreate the VM to apply a different bootstrap password. The VM lifecycle ignores later password-hash differences because `bcrypt()` uses a new random salt on each evaluation.
 
 ## QEMU Guest Agent
 
