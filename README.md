@@ -28,7 +28,7 @@ The project keeps environment-specific settings outside the base image and suppo
 tofu/                      OpenTofu deployment configuration and examples
   main.tf                  VM and image import configuration
   variables.tf             Inputs, defaults, validation and descriptions
-  outputs.tf               VM ID, management IP and source image ID
+  outputs.tf               VM ID, guest-reported IP addresses and source image ID
   versions.tf              OpenTofu and provider requirements
   terraform.tfvars.example Non-secret configuration example
   token.auto.tfvars.example API token example
@@ -160,7 +160,19 @@ The bootstrap is intentionally one-time. Changing `cloudinit_password` on an exi
 
 ## QEMU Guest Agent
 
-QEMU Guest Agent is enabled in both layers: the OPNsense image starts the agent, and the Proxmox VM configuration exposes the `virtio` guest-agent channel. OpenTofu does not wait for an IP address by default, so agent startup cannot hold `apply` open.
+QEMU Guest Agent is enabled in both layers: the OPNsense image starts the agent, and the Proxmox VM configuration exposes the `virtio` guest-agent channel. By default, OpenTofu waits for the guest to report an IPv4 address before completing `apply`. Set `qemu_agent_wait_for_ip.disabled = true` to opt out.
+
+The IP outputs describe actual guest state reported through Proxmox rather than repeating Cloud-Init input:
+
+- `management_ip`: IP portion of the first usable guest-reported IPv4 address;
+- `management_cidr`: the same address with its prefix;
+- `management_prefix_length`: numeric prefix length;
+- `management_netmask`: dotted-decimal IPv4 netmask;
+- `ipv4_addresses`: all usable IPv4 addresses as objects containing `interface`, `address`, `cidr`, `prefix_length` and `netmask`;
+- `ipv6_addresses`: all usable IPv6 addresses as objects containing `interface`, `address`, `cidr` and `prefix_length`;
+- `configured_management_ip`: IPv4 address requested through Cloud-Init.
+
+Loopback, link-local and unspecified addresses are excluded. Network information is returned in separate fields, so consumers do not need to parse CIDR strings. This also works when the guest obtains its address through DHCP or retains an address already present in the source image.
 
 ## Post-deployment verification
 
@@ -190,6 +202,7 @@ The provided `.gitignore` excludes these files. State can still contain sensitiv
 - `cloudinit_password = null`: no WebUI password is provisioned;
 - `ssh_public_key_path = null`: SSH remains disabled;
 - `qemu_agent_enabled = true`;
+- QEMU Guest Agent IPv4 waiting is enabled;
 - one VirtIO management NIC is created; extra NICs are optional.
 
 Review `tofu/terraform.tfvars.example` and every variable description before applying the configuration to a new environment.

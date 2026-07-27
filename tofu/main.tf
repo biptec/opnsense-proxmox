@@ -10,6 +10,55 @@ locals {
   # Both modes produce the same Proxmox file ID consumed by disk.import_from.
   # local mode gets it from the upload resource; proxmox mode uses the supplied ID.
   source_image_file_id = var.image_source == "local" ? proxmox_virtual_environment_file.image[0].id : var.image_file_id
+
+  # Addresses are reported by QEMU Guest Agent after the guest has configured its
+  # interfaces. Preserve both the address and network information so callers do
+  # not need to parse CIDR strings themselves.
+  reported_ipv4_address_data = flatten([
+    for interface_index, interface_addresses in proxmox_virtual_environment_vm.opnsense.ipv4_addresses : [
+      for address in interface_addresses : {
+        interface = try(proxmox_virtual_environment_vm.opnsense.network_interface_names[interface_index], null)
+        address   = split("/", address)[0]
+        cidr      = strcontains(address, "/") ? address : "${address}/32"
+      }
+    ]
+  ])
+
+  reported_ipv4_addresses = distinct([
+    for item in local.reported_ipv4_address_data : {
+      interface     = item.interface
+      address       = item.address
+      cidr          = item.cidr
+      prefix_length = tonumber(split("/", item.cidr)[1])
+      netmask       = cidrnetmask(item.cidr)
+    }
+    if !startswith(item.address, "127.") &&
+    !startswith(item.address, "169.254.") &&
+    item.address != "0.0.0.0"
+  ])
+
+  reported_ipv6_address_data = flatten([
+    for interface_index, interface_addresses in proxmox_virtual_environment_vm.opnsense.ipv6_addresses : [
+      for address in interface_addresses : {
+        interface = try(proxmox_virtual_environment_vm.opnsense.network_interface_names[interface_index], null)
+        address   = split("/", address)[0]
+        cidr      = strcontains(address, "/") ? address : "${address}/128"
+      }
+    ]
+  ])
+
+  reported_ipv6_addresses = distinct([
+    for item in local.reported_ipv6_address_data : {
+      interface     = item.interface
+      address       = item.address
+      cidr          = item.cidr
+      prefix_length = tonumber(split("/", item.cidr)[1])
+    }
+    if item.address != "::1" &&
+    item.address != "::" &&
+    !startswith(lower(item.address), "fe80:")
+  ])
+
 }
 
 # Preserve the existing state address after renaming the resource to a name that
