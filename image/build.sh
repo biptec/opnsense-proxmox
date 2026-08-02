@@ -16,4 +16,4 @@ PLUGIN_DIR="$ROOT_DIR/guest/nocloud-bootstrap"
 
 exec make -C "$TOOLS_DIR" \
     "custom-vm,qcow2,$IMAGE_SIZE,$IMAGE_SWAP,proxmox" \
-    ADDITIONS="os-qemu-guest-agent $PLUGIN_DIR"
+    ADDITIONS="os-qemu-guest-agent os-caddy $PLUGIN_DIR"

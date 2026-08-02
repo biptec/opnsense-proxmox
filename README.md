@@ -14,6 +14,7 @@ The project keeps environment-specific settings outside the base image and suppo
 - preserve image networking, request DHCP, or apply a static management IPv4 configuration through NoCloud;
 - apply hostname, DNS and optional administrative credentials independently from the network mode;
 - enable QEMU Guest Agent integration for Proxmox by default;
+- include the OPNsense Caddy plugin for API-managed reverse proxy configuration;
 
 ## Requirements
 
@@ -23,7 +24,7 @@ The project keeps environment-specific settings outside the base image and suppo
 - `hashicorp/external` provider 2.4.0;
 - Python 3 on the OpenTofu runner for reading the raw Guest Agent network response;
 - an OPNsense build environment with `/usr/tools` and `/usr/plugins` when producing a new image;
-- the guest package in `guest/nocloud-bootstrap`, built together with `os-qemu-guest-agent`.
+- the guest package in `guest/nocloud-bootstrap`, built together with `os-qemu-guest-agent` and `os-caddy`.
 
 ## Repository files
 
@@ -79,7 +80,7 @@ The wrapper calls the OPNsense custom-image pipeline with:
 
 ```sh
 make -C /usr/tools custom-vm,qcow2,20G,never,proxmox \
-  ADDITIONS="os-qemu-guest-agent /path/to/opnsense-proxmox/guest/nocloud-bootstrap"
+  ADDITIONS="os-qemu-guest-agent os-caddy /path/to/opnsense-proxmox/guest/nocloud-bootstrap"
 ```
 
 The guest package installs:
@@ -90,6 +91,8 @@ The guest package installs:
 ```
 
 The source remains in this repository; it is not stored in the OPNsense core fork.
+
+`os-caddy` is installed in every Proxmox image but remains disabled until it is configured. The Terraform provider can manage Caddy settings, domains, handlers, access lists, automatic public ACME certificates and certificates issued by an existing OPNsense CA after deployment.
 
 ## Image source modes
 
