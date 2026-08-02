@@ -76,6 +76,8 @@ Build the QCOW2 on the OPNsense build host:
 ./image/build.sh
 ```
 
+The wrapper defaults to OPNsense `26.7.1`, the organization forks, and their `master` branches. Override `OPNSENSE_VERSION`, `GITBASE`, or an individual `*BRANCH` variable only when deliberately building another release or source tree.
+
 The wrapper calls the OPNsense custom-image pipeline with:
 
 ```sh
