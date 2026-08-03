@@ -16,6 +16,7 @@ The project keeps environment-specific settings outside the base image and suppo
 - enable QEMU Guest Agent integration for Proxmox by default;
 - include the OPNsense Caddy plugin for API-managed reverse proxy configuration;
 - provide a reusable Caddy reverse-proxy module that maps a supplied domain to one or more internal upstreams;
+- provide a reusable edge-ingress module that translates interface ports 80 and 443 to local Caddy listeners without exposing the WebUI;
 
 ## Requirements
 
@@ -41,6 +42,7 @@ tofu/                      OpenTofu deployment configuration and examples
 guest/nocloud-bootstrap/   Guest-side NoCloud package and tests
 image/build.sh             Reproducible Proxmox QCOW2 build entrypoint
 modules/caddy-reverse-proxy Reusable domain-to-upstream Caddy module; DNS remains external
+modules/caddy-edge-ingress  Interface-scoped DNAT and firewall rules for local Caddy listeners
 ```
 
 ## Quick start
@@ -104,6 +106,10 @@ The source remains in this repository; it is not stored in the OPNsense core for
 `modules/caddy-reverse-proxy` creates a Caddy domain and handler, with an optional access list. It accepts a domain that already exists in DNS and one or more internal upstream addresses. Public DNS and internal Unbound records remain outside the module so callers can use the DNS system appropriate for each environment.
 
 The module supports public ACME certificates, dynamically issued certificates from an existing OPNsense CA, existing custom certificates, HTTP without TLS, HTTPS upstream trust, SNI, load balancing and health checks. See the module README for examples.
+
+## Caddy edge-ingress module
+
+`modules/caddy-edge-ingress` creates interface-scoped IPv4 DNAT and pass rules for ports 80 and 443. It translates those requests to Caddy on loopback ports 8080 and 8443 while management-interface traffic continues to reach the OPNsense WebUI. The module does not manage global Caddy settings, proxy domains, DNS, or interface assignments. See the module README for the required singleton settings import and usage examples.
 
 ## Image source modes
 

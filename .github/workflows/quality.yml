@@ -57,3 +57,9 @@ jobs:
 
       - name: Test Caddy reverse proxy module
         run: tofu -chdir=modules/caddy-reverse-proxy test
+
+      - name: Initialize Caddy edge ingress module
+        run: tofu -chdir=modules/caddy-edge-ingress init -backend=false -input=false
+
+      - name: Test Caddy edge ingress module
+        run: tofu -chdir=modules/caddy-edge-ingress test
