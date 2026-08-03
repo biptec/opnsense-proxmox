@@ -33,6 +33,7 @@ IMAGE_SWAP="1G" \
 "$ROOT_DIR/image/build.sh"
 
 EXPECTED_PLUGIN="$ROOT_DIR/guest/nocloud-bootstrap"
+EXPECTED_CADDY_POLICY="$ROOT_DIR/guest/caddy-policy"
 grep -Fx -- 'NAME=OPNsense' "$TMPDIR/arguments" >/dev/null
 grep -Fx -- 'TYPE=opnsense' "$TMPDIR/arguments" >/dev/null
 grep -Fx -- 'VERSION=26.7.1' "$TMPDIR/arguments" >/dev/null
@@ -45,4 +46,4 @@ done
 grep -Fx -- '-C' "$TMPDIR/arguments" >/dev/null
 grep -Fx -- "$TMPDIR/tools" "$TMPDIR/arguments" >/dev/null
 grep -Fx -- 'custom-vm,qcow2,24G,1G,proxmox' "$TMPDIR/arguments" >/dev/null
-grep -Fx -- "ADDITIONS=os-qemu-guest-agent os-caddy $EXPECTED_PLUGIN" "$TMPDIR/arguments" >/dev/null
+grep -Fx -- "ADDITIONS=os-qemu-guest-agent os-caddy $EXPECTED_PLUGIN $EXPECTED_CADDY_POLICY" "$TMPDIR/arguments" >/dev/null
