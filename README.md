@@ -15,6 +15,7 @@ The project keeps environment-specific settings outside the base image and suppo
 - apply hostname, DNS and optional administrative credentials independently from the network mode;
 - enable QEMU Guest Agent integration for Proxmox by default;
 - include the OPNsense Caddy plugin for API-managed reverse proxy configuration;
+- provide a reusable Caddy reverse-proxy module that maps a supplied domain to one or more internal upstreams;
 
 ## Requirements
 
@@ -24,7 +25,7 @@ The project keeps environment-specific settings outside the base image and suppo
 - `hashicorp/external` provider 2.4.0;
 - Python 3 on the OpenTofu runner for reading the raw Guest Agent network response;
 - an OPNsense build environment with `/usr/tools` and `/usr/plugins` when producing a new image;
-- the guest package in `guest/nocloud-bootstrap`, built together with `os-qemu-guest-agent` and `os-caddy`.
+- the local packages in `guest/nocloud-bootstrap` and `guest/caddy-policy`, built together with `os-qemu-guest-agent` and `os-caddy`.
 
 ## Repository files
 
@@ -39,6 +40,7 @@ tofu/                      OpenTofu deployment configuration and examples
   scripts/                  Local helpers used by OpenTofu
 guest/nocloud-bootstrap/   Guest-side NoCloud package and tests
 image/build.sh             Reproducible Proxmox QCOW2 build entrypoint
+modules/caddy-reverse-proxy Reusable domain-to-upstream Caddy module; DNS remains external
 ```
 
 ## Quick start
@@ -96,6 +98,12 @@ The local guest packages install:
 The source remains in this repository; it is not stored in the OPNsense core fork.
 
 `os-caddy` is installed in every Proxmox image but remains disabled until it is configured. The local `os-caddy-policy` package pins automatic public certificate issuance to the Let's Encrypt ACME v2 production directory through the global import supported by `os-caddy`. The Terraform provider can manage Caddy settings, domains, handlers, access lists, automatic public ACME certificates and certificates issued by an existing OPNsense CA after deployment.
+
+## Caddy reverse-proxy module
+
+`modules/caddy-reverse-proxy` creates a Caddy domain and handler, with an optional access list. It accepts a domain that already exists in DNS and one or more internal upstream addresses. Public DNS and internal Unbound records remain outside the module so callers can use the DNS system appropriate for each environment.
+
+The module supports public ACME certificates, dynamically issued certificates from an existing OPNsense CA, existing custom certificates, HTTP without TLS, HTTPS upstream trust, SNI, load balancing and health checks. See the module README for examples.
 
 ## Image source modes
 
