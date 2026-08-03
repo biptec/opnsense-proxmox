@@ -4,6 +4,15 @@ Creates one Caddy frontend domain and one reverse-proxy handler on OPNsense. It 
 
 The module does not create public or internal DNS records. The caller must ensure that `domain` resolves appropriately before enabling public ACME issuance.
 
+## Requirements
+
+- OpenTofu 1.12 or newer;
+- `biptec/opnsense` provider 0.26.0 or newer;
+- `os-caddy` already installed in OPNsense;
+- global `opnsense_caddy_settings`, Caddy service enablement, firewall rules, WAN NAT and DNS managed outside this module.
+
+The module owns only one Caddy domain, one handler, an optional generated access list, and—when `certificate_mode = "internal"`—the leaf certificate issued from an existing OPNsense CA. It never creates or exports the CA private key.
+
 ## Public service
 
 ```hcl

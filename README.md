@@ -25,7 +25,7 @@ The project keeps environment-specific settings outside the base image and suppo
 - `hashicorp/external` provider 2.4.0;
 - Python 3 on the OpenTofu runner for reading the raw Guest Agent network response;
 - an OPNsense build environment with `/usr/tools` and `/usr/plugins` when producing a new image;
-- the guest package in `guest/nocloud-bootstrap`, built together with `os-qemu-guest-agent` and `os-caddy`.
+- the local packages in `guest/nocloud-bootstrap` and `guest/caddy-policy`, built together with `os-qemu-guest-agent` and `os-caddy`.
 
 ## Repository files
 

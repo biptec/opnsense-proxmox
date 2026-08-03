@@ -58,10 +58,20 @@ resource "opnsense_caddy_handler" "this" {
   upstream_port     = var.upstream_port
   upstream_protocol = var.upstream_protocol
 
-  tls_trust_ca_ref_id   = var.upstream_protocol == "https" ? var.upstream_tls_ca_ref_id != null ? var.upstream_tls_ca_ref_id : "" : ""
-  tls_server_name       = var.upstream_protocol == "https" ? var.upstream_tls_server_name != null ? var.upstream_tls_server_name : "" : ""
+  tls_trust_ca_ref_id   = var.upstream_tls_ca_ref_id != null ? var.upstream_tls_ca_ref_id : ""
+  tls_server_name       = var.upstream_tls_server_name != null ? var.upstream_tls_server_name : ""
   load_balancing_policy = var.load_balancing_policy != null ? var.load_balancing_policy : ""
   health_uri            = var.health_uri != null ? var.health_uri : ""
   health_status         = var.health_status != null ? var.health_status : ""
   description           = var.description
+
+  lifecycle {
+    precondition {
+      condition = (
+        var.upstream_protocol == "https" ||
+        (var.upstream_tls_ca_ref_id == null && var.upstream_tls_server_name == null)
+      )
+      error_message = "upstream_tls_ca_ref_id and upstream_tls_server_name require upstream_protocol https."
+    }
+  }
 }

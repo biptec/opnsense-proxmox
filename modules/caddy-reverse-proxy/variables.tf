@@ -115,21 +115,46 @@ variable "upstream_tls_server_name" {
 }
 
 variable "load_balancing_policy" {
-  description = "Optional Caddy load-balancing policy such as round_robin or least_conn."
+  description = "Optional Caddy load-balancing policy: first, round_robin, least_conn, ip_hash, client_ip_hash, or uri_hash."
   type        = string
   default     = null
+
+  validation {
+    condition = var.load_balancing_policy == null || contains([
+      "first",
+      "round_robin",
+      "least_conn",
+      "ip_hash",
+      "client_ip_hash",
+      "uri_hash",
+    ], var.load_balancing_policy)
+    error_message = "load_balancing_policy must be null, first, round_robin, least_conn, ip_hash, client_ip_hash, or uri_hash."
+  }
 }
 
 variable "health_uri" {
   description = "Optional active health-check URI beginning with a slash."
   type        = string
   default     = null
+
+  validation {
+    condition     = var.health_uri == null || startswith(var.health_uri, "/")
+    error_message = "health_uri must be null or begin with a slash."
+  }
 }
 
 variable "health_status" {
   description = "Optional expected health-check status such as 200 or 2xx."
   type        = string
   default     = null
+
+  validation {
+    condition = (
+      var.health_status == null ||
+      can(regex("^[1-5](?:[0-9]{2}|xx)$", lower(var.health_status)))
+    )
+    error_message = "health_status must be null, a three-digit HTTP status from 100 to 599, or a class such as 2xx."
+  }
 }
 
 variable "description" {
