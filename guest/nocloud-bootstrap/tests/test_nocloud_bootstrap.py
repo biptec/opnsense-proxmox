@@ -3,6 +3,7 @@
 import os
 import stat
 import subprocess
+import sys
 import tempfile
 import unittest
 import xml.etree.ElementTree as ET
@@ -138,7 +139,7 @@ config:
                 "BOOTSTRAP_INTERFACE_MAP": '{"02:00:00:00:00:01":"vtnet0"}',
             }
         )
-        subprocess.run([str(SCRIPT)], env=env, check=True)
+        subprocess.run([sys.executable, str(SCRIPT)], env=env, check=True)
         return ET.parse(config).getroot(), marker, sudoers
 
     def assert_root_remote_login_disabled(self, system):

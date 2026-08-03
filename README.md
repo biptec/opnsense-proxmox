@@ -14,6 +14,7 @@ The project keeps environment-specific settings outside the base image and suppo
 - preserve image networking, request DHCP, or apply a static management IPv4 configuration through NoCloud;
 - apply hostname, DNS and optional administrative credentials independently from the network mode;
 - enable QEMU Guest Agent integration for Proxmox by default;
+- include the OPNsense Caddy plugin for API-managed reverse proxy configuration;
 
 ## Requirements
 
@@ -23,7 +24,7 @@ The project keeps environment-specific settings outside the base image and suppo
 - `hashicorp/external` provider 2.4.0;
 - Python 3 on the OpenTofu runner for reading the raw Guest Agent network response;
 - an OPNsense build environment with `/usr/tools` and `/usr/plugins` when producing a new image;
-- the guest package in `guest/nocloud-bootstrap`, built together with `os-qemu-guest-agent`.
+- the guest package in `guest/nocloud-bootstrap`, built together with `os-qemu-guest-agent` and `os-caddy`.
 
 ## Repository files
 
@@ -75,21 +76,26 @@ Build the QCOW2 on the OPNsense build host:
 ./image/build.sh
 ```
 
+The wrapper defaults to OPNsense `26.7.1`, the organization forks, and their `master` branches. Override `OPNSENSE_VERSION`, `GITBASE`, or an individual `*BRANCH` variable only when deliberately building another release or source tree.
+
 The wrapper calls the OPNsense custom-image pipeline with:
 
 ```sh
 make -C /usr/tools custom-vm,qcow2,20G,never,proxmox \
-  ADDITIONS="os-qemu-guest-agent /path/to/opnsense-proxmox/guest/nocloud-bootstrap"
+  ADDITIONS="os-qemu-guest-agent os-caddy /path/to/opnsense-proxmox/guest/nocloud-bootstrap /path/to/opnsense-proxmox/guest/caddy-policy"
 ```
 
-The guest package installs:
+The local guest packages install:
 
 ```text
 /usr/local/opnsense/scripts/boot/nocloud_bootstrap.py
 /usr/local/etc/rc.syshook.d/early/20-nocloud-bootstrap
+/usr/local/etc/caddy/caddy.d/10-acme-ca.global
 ```
 
 The source remains in this repository; it is not stored in the OPNsense core fork.
+
+`os-caddy` is installed in every Proxmox image but remains disabled until it is configured. The local `os-caddy-policy` package pins automatic public certificate issuance to the Let's Encrypt ACME v2 production directory through the global import supported by `os-caddy`. The Terraform provider can manage Caddy settings, domains, handlers, access lists, automatic public ACME certificates and certificates issued by an existing OPNsense CA after deployment.
 
 ## Image source modes
 

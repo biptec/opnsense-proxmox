@@ -1,0 +1,3 @@
+Pins Caddy automatic HTTPS certificate issuance to the Let's Encrypt ACME
+v2 production directory. The policy is loaded through the user global import
+provided by os-caddy and does not contain credentials, domain names, or keys.
