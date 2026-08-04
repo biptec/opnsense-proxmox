@@ -6,6 +6,7 @@ The example owns only application-level resources:
 
 - Caddy domains;
 - Caddy handlers;
+- per-route header operations, including frontend Host preservation by default;
 - optional access lists;
 - ACME, internal, or existing site certificates;
 - optional Unbound host overrides.
@@ -51,5 +52,7 @@ tofu init
 tofu plan
 tofu apply
 ```
+
+Each route preserves the frontend `Host` header by default so virtual-host upstreams work correctly. Set `preserve_host = false` only when supplying a custom Host operation through `header_ids`.
 
 Public DNS must already resolve to the router. Unbound records are created only for routes with `unbound_address`.

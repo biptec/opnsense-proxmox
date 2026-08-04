@@ -5,6 +5,8 @@ locals {
     replace(replace(var.domain, "*.", "wildcard-"), ".", "-")
   )
   effective_access_list_id = local.creates_access_list ? opnsense_caddy_access_list.this[0].id : (var.access_list_id != null ? var.access_list_id : "")
+  preserve_host_header_ids = var.preserve_host ? toset([opnsense_caddy_header.preserve_host[0].id]) : toset([])
+  effective_header_ids     = setunion(var.header_ids, local.preserve_host_header_ids)
 }
 
 resource "opnsense_caddy_access_list" "this" {
@@ -13,6 +15,15 @@ resource "opnsense_caddy_access_list" "this" {
   name        = local.generated_access_list_name
   client_ips  = var.allowed_networks
   description = var.description
+}
+
+resource "opnsense_caddy_header" "preserve_host" {
+  count = var.preserve_host ? 1 : 0
+
+  direction   = "header_up"
+  name        = "Host"
+  value       = "{host}"
+  description = "Preserve frontend Host header for ${var.domain}"
 }
 
 resource "opnsense_caddy_domain" "this" {
@@ -57,6 +68,7 @@ resource "opnsense_caddy_handler" "this" {
   upstream_domains  = var.upstream_domains
   upstream_port     = var.upstream_port
   upstream_protocol = var.upstream_protocol
+  header_ids        = local.effective_header_ids
 
   tls_trust_ca_ref_id   = var.upstream_tls_ca_ref_id != null ? var.upstream_tls_ca_ref_id : ""
   tls_server_name       = var.upstream_tls_server_name != null ? var.upstream_tls_server_name : ""

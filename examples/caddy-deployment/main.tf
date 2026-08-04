@@ -31,6 +31,8 @@ module "route" {
   internal_certificate_lifetime_days = each.value.internal_certificate_lifetime_days
   certificate_ref_id                 = each.value.certificate_ref_id
   allowed_networks                   = each.value.allowed_networks
+  preserve_host                      = each.value.preserve_host
+  header_ids                         = each.value.header_ids
   access_list_name                   = each.value.access_list_name
   upstream_tls_ca_ref_id             = each.value.upstream_tls_ca_ref_id
   upstream_tls_server_name           = each.value.upstream_tls_server_name

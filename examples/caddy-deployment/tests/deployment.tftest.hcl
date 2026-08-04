@@ -28,6 +28,13 @@ run "application_owned_routes" {
   }
 
   assert {
+    condition = alltrue([
+      for route in values(module.route) : route.preserve_host_header_id != ""
+    ])
+    error_message = "Every application route must preserve the frontend Host header by default."
+  }
+
+  assert {
     condition = (
       opnsense_unbound_host_override.route["service.internal.example.com"].hostname == "service" &&
       opnsense_unbound_host_override.route["service.internal.example.com"].domain == "internal.example.com" &&

@@ -15,6 +15,16 @@ run "public_acme" {
   }
 
   assert {
+    condition     = length(opnsense_caddy_header.preserve_host) == 1
+    error_message = "Host preservation must be enabled by default."
+  }
+
+  assert {
+    condition     = opnsense_caddy_handler.this.header_ids == toset([opnsense_caddy_header.preserve_host[0].id])
+    error_message = "The generated Host header operation must be attached to the handler."
+  }
+
+  assert {
     condition     = opnsense_caddy_handler.this.upstream_protocol == "http"
     error_message = "The default upstream protocol must be HTTP."
   }
@@ -223,4 +233,27 @@ run "reject_invalid_health_status" {
   }
 
   expect_failures = [var.health_status]
+}
+
+
+run "custom_headers_without_host_preservation" {
+  command = plan
+
+  variables {
+    domain           = "application.example.com"
+    upstream_domains = ["10.20.0.10"]
+    upstream_port    = 8080
+    preserve_host    = false
+    header_ids       = ["custom-host-header", "security-header"]
+  }
+
+  assert {
+    condition     = length(opnsense_caddy_header.preserve_host) == 0
+    error_message = "preserve_host=false must not create a generated header operation."
+  }
+
+  assert {
+    condition     = opnsense_caddy_handler.this.header_ids == toset(["custom-host-header", "security-header"])
+    error_message = "Explicit header IDs must be attached unchanged."
+  }
 }

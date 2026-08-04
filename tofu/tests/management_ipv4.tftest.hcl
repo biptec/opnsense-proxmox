@@ -12,6 +12,7 @@ run "preserve_omits_nocloud_ip_config" {
     image_source      = "proxmox"
     image_file_id     = "local:import/OPNsense.qcow2"
     vm_started        = false
+    management_ipv4   = { mode = "preserve" }
   }
 
   assert {

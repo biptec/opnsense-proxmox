@@ -11,6 +11,8 @@ variable "routes" {
     certificate_ref_id                 = optional(string)
     allowed_networks                   = optional(set(string), [])
     access_list_name                   = optional(string)
+    preserve_host                      = optional(bool, true)
+    header_ids                         = optional(set(string), [])
     upstream_tls_ca_ref_id             = optional(string)
     upstream_tls_server_name           = optional(string)
     load_balancing_policy              = optional(string)

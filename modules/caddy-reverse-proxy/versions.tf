@@ -4,7 +4,7 @@ terraform {
   required_providers {
     opnsense = {
       source  = "biptec/opnsense"
-      version = ">= 0.26.0"
+      version = ">= 0.27.0"
     }
   }
 }

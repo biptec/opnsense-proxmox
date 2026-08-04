@@ -27,6 +27,11 @@ run "global_router_policy" {
 run "default_passthrough_interface" {
   command = plan
 
+  variables {
+    ingress_interface   = "wan"
+    ingress_destination = null
+  }
+
   assert {
     condition     = module.edge_ingress.destination == "wanip"
     error_message = "The default direct-interface deployment must match wanip."

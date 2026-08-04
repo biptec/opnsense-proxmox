@@ -102,6 +102,18 @@ variable "access_list_name" {
   default     = null
 }
 
+variable "preserve_host" {
+  description = "Preserve the frontend Host header when proxying to the upstream. Disable it when a custom Host header is supplied through header_ids."
+  type        = bool
+  default     = true
+}
+
+variable "header_ids" {
+  description = "Additional existing Caddy header-operation UUIDs attached to the reverse-proxy handler."
+  type        = set(string)
+  default     = []
+}
+
 variable "upstream_tls_ca_ref_id" {
   description = "Optional OPNsense CA reference ID trusted for an HTTPS upstream."
   type        = string
