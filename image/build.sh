@@ -2,7 +2,7 @@
 
 set -eu
 
-ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+ROOT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 TOOLS_DIR=${TOOLS_DIR:-/usr/tools}
 IMAGE_SIZE=${IMAGE_SIZE:-20G}
 IMAGE_SWAP=${IMAGE_SWAP:-never}
