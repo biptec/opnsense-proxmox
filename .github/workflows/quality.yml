@@ -49,8 +49,23 @@ jobs:
       - name: Test NoCloud bootstrap
         run: python -m unittest discover -s guest/nocloud-bootstrap/tests -p 'test_*.py'
 
+      - name: Test deployment scripts
+        run: python -m unittest discover -s scripts/tests -p 'test_*.py'
+
       - name: Test Proxmox network helper
         run: python -m unittest tofu/scripts/test_read_management_network.py
+
+      - name: Initialize VM lifecycle stage
+        run: tofu -chdir=tofu init -backend=false -input=false
+
+      - name: Test VM lifecycle stage
+        run: tofu -chdir=tofu test
+
+      - name: Initialize global router stage
+        run: tofu -chdir=router init -backend=false -input=false
+
+      - name: Test global router stage
+        run: tofu -chdir=router test
 
       - name: Initialize Caddy reverse proxy module
         run: tofu -chdir=modules/caddy-reverse-proxy init -backend=false -input=false
