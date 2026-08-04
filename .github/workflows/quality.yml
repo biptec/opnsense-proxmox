@@ -63,3 +63,9 @@ jobs:
 
       - name: Test Caddy edge ingress module
         run: tofu -chdir=modules/caddy-edge-ingress test
+
+      - name: Initialize Caddy deployment example
+        run: tofu -chdir=examples/caddy-deployment init -backend=false -input=false
+
+      - name: Test Caddy deployment example
+        run: tofu -chdir=examples/caddy-deployment test

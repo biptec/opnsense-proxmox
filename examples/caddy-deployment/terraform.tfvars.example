@@ -1,0 +1,19 @@
+management_interface       = "lan"
+public_ingress_interface    = "wan"
+internal_ingress_interface  = "opt2"
+internal_service_address    = "10.40.0.10"
+internal_source_network     = "TRUSTED_INTERNALS"
+acme_email                  = "operations@example.com"
+
+public_domain               = "application.example.com"
+public_upstream_domains     = ["10.20.0.10"]
+public_upstream_port        = 8080
+
+internal_domain             = "application.internal.example.com"
+internal_upstream_domains   = ["10.20.0.20"]
+internal_upstream_port      = 8443
+internal_upstream_protocol  = "https"
+internal_ca_name            = "internal.example.com"
+internal_allowed_networks   = ["10.0.0.0/8"]
+internal_upstream_tls_ca_ref_id   = "existing-upstream-ca-ref"
+internal_upstream_tls_server_name = "backend.internal.example.com"

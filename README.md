@@ -43,6 +43,7 @@ guest/nocloud-bootstrap/   Guest-side NoCloud package and tests
 image/build.sh             Reproducible Proxmox QCOW2 build entrypoint
 modules/caddy-reverse-proxy Reusable domain-to-upstream Caddy module; DNS remains external
 modules/caddy-edge-ingress  Interface-scoped DNAT and firewall rules for local Caddy listeners
+examples/caddy-deployment  Dual-ingress composition with public ACME and internal split DNS
 ```
 
 ## Quick start
@@ -110,6 +111,8 @@ The module supports public ACME certificates, dynamically issued certificates fr
 ## Caddy edge-ingress module
 
 `modules/caddy-edge-ingress` creates interface-scoped IPv4 DNAT and pass rules for ports 80 and 443. It translates those requests to Caddy on loopback ports 8080 and 8443 while management-interface traffic continues to reach the OPNsense WebUI. The module does not manage global Caddy settings, proxy domains, DNS, or interface assignments. See the module README for the required singleton settings import and usage examples.
+
+`examples/caddy-deployment` shows the complete composition: a public ingress for ACME-backed domains, a separate internal service ingress, an existing internal CA, and an Unbound split-DNS record. Public DNS and interface/VIP lifecycles remain outside the example.
 
 ## Image source modes
 
