@@ -1,54 +1,49 @@
-# Caddy deployment example
+# Application-owned Caddy routes
 
-This root configuration composes the reusable Caddy modules into two isolated ingress paths:
+This example represents a separate application or server repository. It assumes that the router platform repository has already prepared OPNsense, moved the WebUI, created the internal CA, configured Caddy on ports 80 and 443, and installed the global firewall rules.
 
-```text
-public interface:80/443       -> Caddy 8080/8443 -> public upstream
-internal service IP:80/443    -> Caddy 8080/8443 -> internal upstream
-management interface:80/443   -> OPNsense WebUI
+The example owns only application-level resources:
+
+- Caddy domains;
+- Caddy handlers;
+- optional access lists;
+- ACME, internal, or existing site certificates;
+- optional Unbound host overrides.
+
+It does not manage the VM, API credentials, WebUI, internal CA, global Caddy settings, ingress firewall, interfaces, public DNS, or upstream workloads.
+
+## Route map
+
+Every entry in `routes` is keyed by its frontend FQDN and declares one or more upstreams:
+
+```hcl
+routes = {
+  "www.example.com" = {
+    upstream_domains = ["10.20.0.10"]
+    upstream_port    = 8080
+    certificate_mode = "acme"
+  }
+}
 ```
+For an internal route, set `certificate_mode = "internal"`, provide the existing CA name, and optionally create a split-DNS record:
 
-Public DNS remains outside OpenTofu. Unbound manages only the internal split-DNS record.
-
-## Required existing infrastructure
-
-- OPNsense with `os-caddy` installed;
-- a management interface used for the WebUI;
-- a different public ingress interface;
-- a different internal service interface;
-- a dedicated IPv4 address or VIP on the internal service interface;
-- an existing OPNsense CA for internal certificates;
-- reachable public and internal upstream services.
-
-The dedicated internal service address must not be the management address. This example intentionally does not create interface assignments or virtual IPs because those lifecycles belong to the network deployment layer.
-
-## Ownership
-
-This configuration manages:
-
-- the imported Caddy settings singleton;
-- public and internal interface-scoped DNAT and pass rules;
-- one public Caddy domain with ACME;
-- one internal Caddy domain and leaf certificate issued by the existing CA;
-- one Unbound A record pointing the internal FQDN to the dedicated service address.
-
-It does not manage public DNS, the internal CA, interface assignments, virtual IPs, upstream workloads, or the OPNsense WebUI.
+```hcl
+"service.internal.example.com" = {
+  upstream_domains  = ["10.20.0.20"]
+  upstream_port     = 8443
+  upstream_protocol = "https"
+  certificate_mode  = "internal"
+  internal_ca_name  = "internal.example.com"
+  allowed_networks  = ["10.0.0.0/8"]
+  unbound_address   = "10.40.0.10"
+}
+```
 
 ## Credentials
 
-Keep API credentials outside files and state:
-
-```sh
-export OPNSENSE_URI="https://router.example.com"
-export OPNSENSE_API_KEY="<api key>"
-export OPNSENSE_API_SECRET="<api secret>"
-```
-
-Use `OPNSENSE_ALLOW_INSECURE=true` only in an isolated laboratory.
+Load the credentials file created by the router platform deployment and export its values only to the provider process. Keep the values out of HCL and state. The provider should also receive `SSL_CERT_FILE` pointing to the exported router CA certificate.
 
 ## Apply
-
-Copy the non-secret example values and review them:
 
 ```sh
 cp terraform.tfvars.example terraform.tfvars
@@ -57,12 +52,4 @@ tofu plan
 tofu apply
 ```
 
-The import block adopts the existing Caddy settings singleton with ID `caddy_settings`. The first plan must show an import rather than an attempt to create a second settings object. Keep `import_caddy_settings = true`; the false value exists only for mock-provider tests because OpenTofu testing does not support import operations.
-
-Before applying, ensure the public FQDN resolves to the public ingress address. The internal FQDN is created in Unbound during apply and resolves to `internal_service_address`.
-
-NAT reflection is disabled on both paths. Internal clients use split DNS instead of hairpinning through the public address.
-
-## Destroy behavior
-
-Destroy removes the Caddy domains, generated internal leaf certificate, Unbound record, and both ingress rule sets. The imported Caddy settings resource is removed from state only; OPNsense settings remain unchanged. Change or disable the settings explicitly before destroy when the service must be stopped as part of decommissioning.
+Public DNS must already resolve to the router. Unbound records are created only for routes with `unbound_address`.

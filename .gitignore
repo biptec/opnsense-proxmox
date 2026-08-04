@@ -24,3 +24,6 @@ id_ed25519.pub
 # Python test artifacts.
 __pycache__/
 *.pyc
+
+# Post-deployment runtime material.
+.router/

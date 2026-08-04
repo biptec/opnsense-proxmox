@@ -15,8 +15,12 @@ The project keeps environment-specific settings outside the base image and suppo
 - apply hostname, DNS and optional administrative credentials independently from the network mode;
 - enable QEMU Guest Agent integration for Proxmox by default;
 - include the OPNsense Caddy plugin for API-managed reverse proxy configuration;
-- provide a reusable Caddy reverse-proxy module that maps a supplied domain to one or more internal upstreams;
-- provide a reusable edge-ingress module that translates interface ports 80 and 443 to local Caddy listeners without exposing the WebUI;
+- wait for SSH and run a versioned idempotent post-deployment bootstrap;
+- generate an OPNsense API key without storing it in OpenTofu state;
+- move the WebUI to a management-only HTTPS port and issue its certificate from an internal CA;
+- apply global Caddy settings and direct HTTP/HTTPS firewall ingress on ports 80 and 443;
+- provide a reusable Caddy reverse-proxy module for application repositories;
+- provide a direct edge-ingress module with no destination NAT or port translation;
 
 ## Requirements
 
@@ -24,52 +28,67 @@ The project keeps environment-specific settings outside the base image and suppo
 - Proxmox VE API access, including `VM.GuestAgent.Audit` on the deployed VM;
 - `bpg/proxmox` provider 0.111.1;
 - `hashicorp/external` provider 2.4.0;
-- Python 3 on the OpenTofu runner for reading the raw Guest Agent network response;
+- `biptec/opnsense` provider 0.26.1 for global router settings;
+- Python 3, OpenSSH and SCP on the OpenTofu runner;
+- an SSH private key matching the NoCloud public key;
 - an OPNsense build environment with `/usr/tools` and `/usr/plugins` when producing a new image;
 - the local packages in `guest/nocloud-bootstrap` and `guest/caddy-policy`, built together with `os-qemu-guest-agent` and `os-caddy`.
 
 ## Repository files
 
 ```text
-tofu/                      OpenTofu deployment configuration and examples
-  main.tf                  VM and image import configuration
-  variables.tf             Inputs, defaults, validation and descriptions
-  outputs.tf               VM ID, management IP/netmask and source image ID
-  versions.tf              OpenTofu and provider requirements
-  terraform.tfvars.example Non-secret configuration example
-  token.auto.tfvars.example API token example
-  scripts/                  Local helpers used by OpenTofu
-guest/nocloud-bootstrap/   Guest-side NoCloud package and tests
-image/build.sh             Reproducible Proxmox QCOW2 build entrypoint
-modules/caddy-reverse-proxy Reusable domain-to-upstream Caddy module; DNS remains external
-modules/caddy-edge-ingress  Interface-scoped DNAT and firewall rules for local Caddy listeners
-examples/caddy-deployment  Dual-ingress composition with public ACME and internal split DNS
+tofu/                       VM lifecycle stage: image, VM, NoCloud and outputs
+router/                     Global OPNsense stage: Caddy 80/443 and ingress firewall
+scripts/deploy.py           Orchestrates VM, SSH bootstrap and global stage
+scripts/router-bootstrap.py Idempotent script executed inside OPNsense over SSH
+guest/nocloud-bootstrap/    Generic guest-side NoCloud package and tests
+image/build.sh              Reproducible Proxmox QCOW2 build entrypoint
+modules/caddy-reverse-proxy Application-owned domain-to-upstream module
+modules/caddy-edge-ingress  Direct interface firewall ingress without NAT
+examples/caddy-deployment   Composition examples for application repositories
 ```
 
 ## Quick start
 
-Copy the examples and add local values:
+Copy the environment examples and add local values:
 
 ```sh
 cp tofu/terraform.tfvars.example tofu/terraform.tfvars
 cp tofu/token.auto.tfvars.example tofu/token.auto.tfvars
+cp router/terraform.tfvars.example router/terraform.tfvars
 ```
 
-Keep the API token outside `tofu/terraform.tfvars`:
+Keep the Proxmox API token outside `tofu/terraform.tfvars`:
 
 ```hcl
 proxmox_api_token = "user@realm!token-id=token-secret"
 ```
 
-Then initialise and review the deployment:
+Deploy the VM, prepare OPNsense over SSH, and apply the global router stage:
 
 ```sh
-tofu -chdir=tofu init
-tofu -chdir=tofu fmt -check
-tofu -chdir=tofu validate
-tofu -chdir=tofu plan
-tofu -chdir=tofu apply
+python3 scripts/deploy.py --ssh-private-key ~/.ssh/id_ed25519
 ```
+
+The command remains interactive for both OpenTofu applies. Add `--auto-approve` only in a controlled automation environment. Runtime credentials are written to `.router/credentials.json` with mode `0600`; the public CA certificate is written to `.router/ca.pem`. Neither value is stored in OpenTofu state.
+
+## Responsibility model
+
+This repository owns the router platform and its global policy:
+
+```text
+VM and NoCloud
+→ SSH readiness
+→ API key generation
+→ internal CA and WebUI certificate
+→ WebUI on the management interface and port 10443
+→ Caddy global settings on ports 80 and 443
+→ global HTTP and HTTPS firewall pass rules
+```
+
+It must not contain application domains, application access lists, upstream server addresses, or application-specific Unbound records. Those belong to the repository that owns each server or service. Destroying an application repository must remove only its own Caddy domains, handlers, certificates, access lists, and DNS records without changing this global router configuration.
+
+The base image remains universal. It contains required packages and generic NoCloud support but no environment-specific CA, WebUI port, Caddy listener configuration, domains, or API credentials.
 
 ## Build the OPNsense image
 
@@ -110,9 +129,11 @@ The module supports public ACME certificates, dynamically issued certificates fr
 
 ## Caddy edge-ingress module
 
-`modules/caddy-edge-ingress` creates interface-scoped IPv4 DNAT and pass rules for ports 80 and 443. It translates those requests to Caddy on loopback ports 8080 and 8443 while management-interface traffic continues to reach the OPNsense WebUI. The module does not manage global Caddy settings, proxy domains, DNS, or interface assignments. See the module README for the required singleton settings import and usage examples.
+`modules/caddy-edge-ingress` creates only two interface-scoped IPv4 pass rules for Caddy on ports 80 and 443. It does not create destination NAT, loopback translation, or alternate listener ports. This is the same packet flow used when the public NIC is attached directly to OPNsense through PCI passthrough.
 
-`examples/caddy-deployment` shows the complete composition: a public ingress for ACME-backed domains, a separate internal service ingress, an existing internal CA, and an Unbound split-DNS record. Public DNS and interface/VIP lifecycles remain outside the example.
+The WebUI must already be bound to the management interface on a different port. The global `router/` stage enforces that contract before enabling Caddy. The module does not manage proxy domains, DNS, certificates, or interface assignments.
+
+`examples/caddy-deployment` demonstrates application-owned reverse-proxy resources. Public DNS and server lifecycles remain outside the global router stage.
 
 ## Image source modes
 
@@ -223,26 +244,36 @@ The bootstrap is intentionally one-time. Changing `cloudinit_password` on an exi
 
 QEMU Guest Agent is enabled in both layers: the OPNsense image starts the agent, and the Proxmox VM configuration exposes the `virtio` guest-agent channel. By default, OpenTofu waits for the guest to report an IPv4 address before completing `apply`. Set `qemu_agent_wait_for_ip.disabled = true` to opt out.
 
-Only two management-network outputs are exposed:
+The lifecycle stage exposes the values required by the SSH bootstrap:
 
 - `management_ip`: actual IPv4 address reported for the management NIC;
-- `management_netmask`: actual dotted-decimal netmask for that address.
+- `management_netmask`: actual dotted-decimal netmask for that address;
+- `cloudinit_username`: administrative SSH account created through NoCloud;
+- `management_fqdn`: management hostname formed from `vm_name` and `dns_domain`.
 
 The management NIC is matched by MAC address, not by assuming that the first global address belongs to it. The `bpg/proxmox` provider currently drops the prefix returned by QEMU Guest Agent, so `tofu/scripts/read-management-network.py` reads the raw Proxmox API response and preserves the prefix before calculating the netmask. It never prints the API token. The helper reads authentication from `PROXMOX_VE_API_TOKEN`, `PM_VE_API_TOKEN`, `TF_VAR_proxmox_api_token`, or the standard gitignored `tofu/token.auto.tfvars` file.
 
 This works in `preserve`, `dhcp` and `static` modes. If the VM is stopped, the agent is disabled, or the management NIC has no usable IPv4 address, both outputs are `null`.
 
-## Post-deployment verification
+## Post-deployment bootstrap and verification
 
-OpenTofu finishes after Proxmox creates and starts the VM. It does not attempt SSH access or an OPNsense API readiness check. Verify the first boot and bootstrap result manually through the Proxmox console.
+`scripts/deploy.py` waits for authenticated SSH after the VM apply, uploads the versioned bootstrap helper, and executes it with passwordless `sudo`. The helper:
 
-A successful `apply` confirms that the requested Proxmox resources were created; it does not prove that every guest service is ready.
+- reuses a valid local API key or creates one with `opnsense-apikey`;
+- creates or verifies the internal `biptec.net` CA without returning its private key;
+- creates or verifies a management WebUI certificate with DNS and IP SANs;
+- binds the WebUI to the management interface on HTTPS port `10443`;
+- disables the automatic HTTP redirect so ports `80` and `443` remain free;
+- verifies the new WebUI endpoint using the generated CA certificate.
+
+The orchestration then imports the Caddy singleton into the global state, configures Caddy on `80/443`, and applies the ingress firewall rules. A completed command therefore verifies VM creation, SSH readiness, API authentication, trusted WebUI TLS, and the global OpenTofu apply. It does not create any application routes.
 
 ## Sensitive and local files
 
 Do not commit:
 
 - API tokens;
+- `.router/credentials.json` and `.router/known_hosts`;
 - `terraform.tfvars`;
 - OpenTofu state;
 - private SSH keys;
@@ -262,6 +293,10 @@ The provided `.gitignore` excludes these files. State can still contain sensitiv
 - `ssh_public_key_path = null`: SSH remains disabled;
 - `qemu_agent_enabled = true`;
 - QEMU Guest Agent IPv4 waiting is enabled;
+- post-deployment WebUI port is `10443` on the management interface;
+- the internal CA is `biptec.net`, RSA-4096, SHA-256, valid for 3650 days;
+- Caddy listens directly on `80/443` with ACME email `webmaster@biptec.com`;
+- global ingress defaults to `wanip`; the laboratory tfvars may override it;
 - one VirtIO management NIC is created; extra NICs are optional.
 
 Review `tofu/terraform.tfvars.example` and every variable description before applying the configuration to a new environment.

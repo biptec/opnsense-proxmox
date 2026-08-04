@@ -1,0 +1,13 @@
+# Global settings only. Do not add application domains or upstream servers here.
+acme_email = "webmaster@biptec.com"
+
+# Use lan for the current DNAT-based laboratory. Change to wan when the public
+# network interface is attached directly to OPNsense.
+ingress_interface   = "lan"
+ingress_destination = "10.200.0.100"
+
+# Public HTTP and HTTPS are accepted from any source.
+ingress_source_network = "any"
+ingress_sequence_base  = 100
+log_ingress            = false
+caddy_log_level         = ""

@@ -1,189 +1,115 @@
 mock_provider "opnsense" {}
 
-variables {
-  import_caddy_settings = false
-}
-
-run "dual_ingress_composition" {
+run "application_owned_routes" {
   command = plan
 
   variables {
-    management_interface       = "lan"
-    public_ingress_interface   = "wan"
-    internal_ingress_interface = "opt2"
-    internal_service_address   = "10.40.0.10"
-    internal_source_network    = "TRUSTED_INTERNALS"
-    public_domain              = "application.example.com"
-    public_upstream_domains    = ["10.20.0.10"]
-    public_upstream_port       = 8080
-    internal_domain            = "application.internal.example.com"
-    internal_upstream_domains  = ["10.20.0.20"]
-    internal_upstream_port     = 8443
-    internal_ca_name           = "internal.example.com"
+    routes = {
+      "www.example.com" = {
+        upstream_domains = ["10.20.0.10"]
+        upstream_port    = 8080
+        certificate_mode = "acme"
+      }
+      "service.internal.example.com" = {
+        upstream_domains  = ["10.20.0.20"]
+        upstream_port     = 8443
+        upstream_protocol = "https"
+        certificate_mode  = "internal"
+        internal_ca_name  = "internal.example.com"
+        allowed_networks  = ["10.0.0.0/8"]
+        unbound_address   = "10.40.0.10"
+      }
+    }
   }
 
   assert {
-    condition     = opnsense_caddy_settings.main.enabled && opnsense_caddy_settings.main.http_port == 8080 && opnsense_caddy_settings.main.https_port == 8443
-    error_message = "Caddy settings must enable the isolated local listeners."
+    condition     = length(module.route) == 2
+    error_message = "Each route entry must create one reverse-proxy module instance."
   }
 
   assert {
-    condition     = module.public_ingress.destination == "wanip"
-    error_message = "Public ingress must default to the public interface address."
+    condition = (
+      opnsense_unbound_host_override.route["service.internal.example.com"].hostname == "service" &&
+      opnsense_unbound_host_override.route["service.internal.example.com"].domain == "internal.example.com" &&
+      opnsense_unbound_host_override.route["service.internal.example.com"].server == "10.40.0.10"
+    )
+    error_message = "Internal split DNS must use the route FQDN and configured address."
   }
 
   assert {
-    condition     = module.internal_ingress.destination == "10.40.0.10"
-    error_message = "Internal ingress must match the dedicated service address."
-  }
-
-  assert {
-    condition     = opnsense_unbound_host_override.internal_proxy.hostname == "application" && opnsense_unbound_host_override.internal_proxy.domain == "internal.example.com"
-    error_message = "The internal FQDN must be split into the correct Unbound hostname and zone."
-  }
-
-  assert {
-    condition     = opnsense_unbound_host_override.internal_proxy.server == "10.40.0.10"
-    error_message = "Unbound must resolve the internal FQDN to the internal service address."
+    condition     = length(opnsense_unbound_host_override.route) == 1
+    error_message = "Public routes must not create Unbound records implicitly."
   }
 }
 
-run "reject_management_public_overlap" {
+run "reject_empty_routes" {
   command = plan
 
   variables {
-    management_interface       = "wan"
-    public_ingress_interface   = "wan"
-    internal_ingress_interface = "opt2"
-    internal_service_address   = "10.40.0.10"
-    public_domain              = "application.example.com"
-    public_upstream_domains    = ["10.20.0.10"]
-    public_upstream_port       = 8080
-    internal_domain            = "application.internal.example.com"
-    internal_upstream_domains  = ["10.20.0.20"]
-    internal_upstream_port     = 8443
-    internal_ca_name           = "internal.example.com"
+    routes = {}
   }
 
-  expect_failures = [opnsense_caddy_settings.main]
+  expect_failures = [var.routes]
 }
 
-run "reject_management_internal_overlap" {
+run "reject_invalid_domain" {
   command = plan
 
   variables {
-    management_interface       = "lan"
-    public_ingress_interface   = "wan"
-    internal_ingress_interface = "lan"
-    internal_service_address   = "10.40.0.10"
-    public_domain              = "application.example.com"
-    public_upstream_domains    = ["10.20.0.10"]
-    public_upstream_port       = 8080
-    internal_domain            = "application.internal.example.com"
-    internal_upstream_domains  = ["10.20.0.20"]
-    internal_upstream_port     = 8443
-    internal_ca_name           = "internal.example.com"
+    routes = {
+      "invalid" = {
+        upstream_domains = ["10.20.0.10"]
+        upstream_port    = 80
+      }
+    }
   }
 
-  expect_failures = [opnsense_caddy_settings.main]
+  expect_failures = [var.routes]
 }
 
-run "reject_shared_ingress_interface" {
+run "reject_invalid_upstream_port" {
   command = plan
 
   variables {
-    management_interface       = "lan"
-    public_ingress_interface   = "wan"
-    internal_ingress_interface = "wan"
-    internal_service_address   = "10.40.0.10"
-    public_domain              = "application.example.com"
-    public_upstream_domains    = ["10.20.0.10"]
-    public_upstream_port       = 8080
-    internal_domain            = "application.internal.example.com"
-    internal_upstream_domains  = ["10.20.0.20"]
-    internal_upstream_port     = 8443
-    internal_ca_name           = "internal.example.com"
+    routes = {
+      "www.example.com" = {
+        upstream_domains = ["10.20.0.10"]
+        upstream_port    = 70000
+      }
+    }
   }
 
-  expect_failures = [opnsense_caddy_settings.main]
+  expect_failures = [var.routes]
 }
 
-run "reject_duplicate_domains" {
+run "reject_internal_route_without_ca" {
   command = plan
 
   variables {
-    management_interface       = "lan"
-    public_ingress_interface   = "wan"
-    internal_ingress_interface = "opt2"
-    internal_service_address   = "10.40.0.10"
-    public_domain              = "application.example.com"
-    public_upstream_domains    = ["10.20.0.10"]
-    public_upstream_port       = 8080
-    internal_domain            = "application.example.com"
-    internal_upstream_domains  = ["10.20.0.20"]
-    internal_upstream_port     = 8443
-    internal_ca_name           = "internal.example.com"
+    routes = {
+      "service.internal.example.com" = {
+        upstream_domains = ["10.20.0.20"]
+        upstream_port    = 80
+        certificate_mode = "internal"
+      }
+    }
   }
 
-  expect_failures = [opnsense_caddy_settings.main]
+  expect_failures = [var.routes]
 }
 
-run "reject_internal_address_with_prefix" {
+run "reject_custom_route_without_certificate" {
   command = plan
 
   variables {
-    management_interface       = "lan"
-    public_ingress_interface   = "wan"
-    internal_ingress_interface = "opt2"
-    internal_service_address   = "10.40.0.10/24"
-    public_domain              = "application.example.com"
-    public_upstream_domains    = ["10.20.0.10"]
-    public_upstream_port       = 8080
-    internal_domain            = "application.internal.example.com"
-    internal_upstream_domains  = ["10.20.0.20"]
-    internal_upstream_port     = 8443
-    internal_ca_name           = "internal.example.com"
+    routes = {
+      "www.example.com" = {
+        upstream_domains = ["10.20.0.10"]
+        upstream_port    = 80
+        certificate_mode = "custom"
+      }
+    }
   }
 
-  expect_failures = [var.internal_service_address]
-}
-
-run "reject_single_label_internal_domain" {
-  command = plan
-
-  variables {
-    management_interface       = "lan"
-    public_ingress_interface   = "wan"
-    internal_ingress_interface = "opt2"
-    internal_service_address   = "10.40.0.10"
-    public_domain              = "application.example.com"
-    public_upstream_domains    = ["10.20.0.10"]
-    public_upstream_port       = 8080
-    internal_domain            = "application"
-    internal_upstream_domains  = ["10.20.0.20"]
-    internal_upstream_port     = 8443
-    internal_ca_name           = "internal.example.com"
-  }
-
-  expect_failures = [var.internal_domain]
-}
-
-run "reject_invalid_dns_label" {
-  command = plan
-
-  variables {
-    management_interface       = "lan"
-    public_ingress_interface   = "wan"
-    internal_ingress_interface = "opt2"
-    internal_service_address   = "10.40.0.10"
-    public_domain              = "application-.example.com"
-    public_upstream_domains    = ["10.20.0.10"]
-    public_upstream_port       = 8080
-    internal_domain            = "application.internal.example.com"
-    internal_upstream_domains  = ["10.20.0.20"]
-    internal_upstream_port     = 8443
-    internal_ca_name           = "internal.example.com"
-  }
-
-  expect_failures = [var.public_domain]
+  expect_failures = [var.routes]
 }
