@@ -17,6 +17,7 @@ The project keeps environment-specific settings outside the base image and suppo
 - verify exact runtime listener ownership from FreeBSD `sockstat` output;
 - verify primary/secondary authoritative DNS, DNSSEC, recursion isolation, transfers, and delegation;
 - include the API extensions, BIND, and Caddy plugins required for declarative platform configuration;
+- provide router foundation and shared-service modules for management listeners, isolated `/30` endpoints, opt-in public VIPs, and explicit DNS/NTP/Caddy listeners;
 - provide a reusable Caddy reverse-proxy module that maps a supplied domain to one or more internal upstreams;
 - provide a reusable edge-ingress module that translates interface ports 80 and 443 to local Caddy listeners without exposing the WebUI;
 
@@ -48,6 +49,8 @@ scripts/verify_listeners.py Exact service listener runtime verifier
 examples/runtime-verification Listener contract and usage example
 scripts/verify_dns.py       Authoritative DNS end-to-end verifier
 examples/dns-verification   Primary/secondary verification contract
+modules/router-foundation    Management listeners and one tagged /30 VLAN per movable service
+modules/router-services      Public VIPs and explicit DNS, NTP, and Caddy listeners
 modules/caddy-reverse-proxy Reusable domain-to-upstream Caddy module; DNS remains external
 modules/caddy-edge-ingress  Interface-scoped DNAT and firewall rules for local Caddy listeners
 examples/caddy-deployment  Dual-ingress composition with public ACME and internal split DNS
@@ -118,6 +121,14 @@ The local guest packages install:
 The source remains in this repository; it is not stored in the OPNsense core fork.
 
 `os-api-extensions`, `os-bind`, and `os-caddy` are installed in every Proxmox image. BIND and Caddy remain disabled until they are configured, while API extensions make the management-service endpoints available immediately after bootstrap. The local `os-caddy-policy` package pins automatic public certificate issuance to the Let's Encrypt ACME v2 production directory through the global import supported by `os-caddy`. The Terraform provider can manage Caddy settings, domains, handlers, access lists, automatic public ACME certificates and certificates issued by an existing OPNsense CA after deployment.
+
+## Router foundation module
+
+`modules/router-foundation` owns the `os-api-extensions` package, management-only WebGUI/API and SSH bindings, and one tagged IPv4 `/30` per movable service. OPNsense permanently owns `.1/30` as the service VLAN gateway and holds `.2` as a bindable IP Alias only while the service runs locally. A later move removes that alias and assigns the unchanged `.2/30` address to the service VM. DNS zones, service configuration, public VIPs, firewall policy and NAT stay outside this foundation layer.
+
+## Router services module
+
+`modules/router-services` owns the public DNS and Caddy VIP definitions, explicit BIND and Caddy listener addresses, and the hardened NTP service binding. Public WAN aliases remain detached by default and require explicit activation when their cutover and ingress policy are ready. BIND active-service ownership remains reserved for the DNS cutover layer; Caddy remains disabled until its dependent site layer is present. DNS cutover and firewall policy are deliberately excluded so they can be applied with their dependent configuration on the actual ingress interfaces.
 
 ## Caddy reverse-proxy module
 

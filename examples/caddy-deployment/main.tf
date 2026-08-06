@@ -14,12 +14,13 @@ import {
 }
 
 resource "opnsense_caddy_settings" "main" {
-  enabled       = true
-  http_port     = var.caddy_http_port
-  https_port    = var.caddy_https_port
-  acme_email    = var.acme_email
-  run_as_user   = "root"
-  http_versions = ["h1", "h2"]
+  enabled          = true
+  http_port        = var.caddy_http_port
+  https_port       = var.caddy_https_port
+  acme_email       = var.acme_email
+  run_as_user      = "root"
+  http_versions    = ["h1", "h2"]
+  listen_addresses = [var.public_destination, var.internal_service_address]
 
   lifecycle {
     precondition {
@@ -35,6 +36,11 @@ resource "opnsense_caddy_settings" "main" {
     precondition {
       condition     = var.public_ingress_interface != var.internal_ingress_interface
       error_message = "public and internal ingress must use different logical interfaces."
+    }
+
+    precondition {
+      condition     = var.public_destination != var.internal_service_address
+      error_message = "public and internal Caddy listener addresses must be different."
     }
 
     precondition {

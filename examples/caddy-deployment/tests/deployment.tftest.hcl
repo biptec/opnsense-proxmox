@@ -2,6 +2,7 @@ mock_provider "opnsense" {}
 
 variables {
   import_caddy_settings = false
+  public_destination    = "198.51.100.80"
 }
 
 run "dual_ingress_composition" {
@@ -23,13 +24,18 @@ run "dual_ingress_composition" {
   }
 
   assert {
-    condition     = opnsense_caddy_settings.main.enabled && opnsense_caddy_settings.main.http_port == 8080 && opnsense_caddy_settings.main.https_port == 8443
-    error_message = "Caddy settings must enable the isolated local listeners."
+    condition = (
+      opnsense_caddy_settings.main.enabled &&
+      opnsense_caddy_settings.main.http_port == 8080 &&
+      opnsense_caddy_settings.main.https_port == 8443 &&
+      opnsense_caddy_settings.main.listen_addresses == toset(["198.51.100.80", "10.40.0.10"])
+    )
+    error_message = "Caddy settings must enable only the dedicated public and internal listeners."
   }
 
   assert {
-    condition     = module.public_ingress.destination == "wanip"
-    error_message = "Public ingress must default to the public interface address."
+    condition     = module.public_ingress.destination == "198.51.100.80"
+    error_message = "Public ingress must target the dedicated public Caddy address."
   }
 
   assert {
@@ -186,4 +192,25 @@ run "reject_invalid_dns_label" {
   }
 
   expect_failures = [var.public_domain]
+}
+
+run "reject_duplicate_listener_address" {
+  command = plan
+
+  variables {
+    public_destination         = "10.40.0.10"
+    management_interface       = "lan"
+    public_ingress_interface   = "wan"
+    internal_ingress_interface = "opt2"
+    internal_service_address   = "10.40.0.10"
+    public_domain              = "application.example.com"
+    public_upstream_domains    = ["10.20.0.10"]
+    public_upstream_port       = 8080
+    internal_domain            = "application.internal.example.com"
+    internal_upstream_domains  = ["10.20.0.20"]
+    internal_upstream_port     = 8443
+    internal_ca_name           = "internal.example.com"
+  }
+
+  expect_failures = [opnsense_caddy_settings.main]
 }

@@ -34,11 +34,31 @@ jobs:
           cache: true
           github_token: ${{ github.token }}
 
+      - name: Install pinned OPNsense provider release
+        env:
+          PROVIDER_VERSION: '0.29.0'
+          PROVIDER_SHA256: '5c9fffaf7058dc4c6087bd3db4e7b80b40f1cfd1950d0e52b4192df759214e92'
+          PROVIDER_MIRROR_DIR: ${{ runner.temp }}/provider-mirror
+        run: |
+          scripts/install-provider-release.sh
+          cat > "${RUNNER_TEMP}/tofurc" <<EOF
+          provider_installation {
+            filesystem_mirror {
+              path    = "${PROVIDER_MIRROR_DIR}"
+              include = ["biptec/opnsense"]
+            }
+            direct {
+              exclude = ["biptec/opnsense"]
+            }
+          }
+          EOF
+          echo "TF_CLI_CONFIG_FILE=${RUNNER_TEMP}/tofurc" >> "${GITHUB_ENV}"
+
       - name: Check OpenTofu formatting
         run: tofu fmt -check -recursive
 
       - name: Check shell syntax
-        run: sh -n image/build.sh image/tests/test_build.sh guest/caddy-policy/tests/test_policy.sh
+        run: sh -n image/build.sh image/tests/test_build.sh guest/caddy-policy/tests/test_policy.sh scripts/install-provider-release.sh
 
       - name: Test image build wrapper
         run: image/tests/test_build.sh
@@ -57,6 +77,18 @@ jobs:
 
       - name: Test authoritative DNS verifier
         run: python -m unittest scripts/test_verify_dns.py
+
+      - name: Initialize router foundation module
+        run: tofu -chdir=modules/router-foundation init -backend=false -input=false
+
+      - name: Test router foundation module
+        run: tofu -chdir=modules/router-foundation test
+
+      - name: Initialize router services module
+        run: tofu -chdir=modules/router-services init -backend=false -input=false
+
+      - name: Test router services module
+        run: tofu -chdir=modules/router-services test
 
       - name: Initialize Caddy reverse proxy module
         run: tofu -chdir=modules/caddy-reverse-proxy init -backend=false -input=false
