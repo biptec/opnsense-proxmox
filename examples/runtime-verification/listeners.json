@@ -1,0 +1,25 @@
+{
+  "listeners": [
+    {
+      "name": "management-webgui",
+      "processes": ["lighttpd"],
+      "protocols": ["tcp4"],
+      "addresses": ["10.0.0.1"],
+      "ports": [443]
+    },
+    {
+      "name": "bind",
+      "processes": ["named"],
+      "protocols": ["tcp4", "udp4"],
+      "addresses": ["198.51.100.53", "10.53.0.2"],
+      "ports": [53]
+    },
+    {
+      "name": "caddy",
+      "processes": ["caddy"],
+      "protocols": ["tcp4"],
+      "addresses": ["198.51.100.80", "10.80.0.2"],
+      "ports": [80, 443]
+    }
+  ]
+}

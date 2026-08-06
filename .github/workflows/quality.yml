@@ -52,6 +52,9 @@ jobs:
       - name: Test Proxmox network helper
         run: python -m unittest tofu/scripts/test_read_management_network.py
 
+      - name: Test listener verifier
+        run: python -m unittest scripts/test_verify_listeners.py
+
       - name: Initialize Caddy reverse proxy module
         run: tofu -chdir=modules/caddy-reverse-proxy init -backend=false -input=false
 

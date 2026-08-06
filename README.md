@@ -14,6 +14,7 @@ The project keeps environment-specific settings outside the base image and suppo
 - preserve image networking, request DHCP, or apply a static management IPv4 configuration through NoCloud;
 - apply hostname, DNS and optional administrative credentials independently from the network mode;
 - enable QEMU Guest Agent integration for Proxmox by default;
+- verify exact runtime listener ownership from FreeBSD `sockstat` output;
 - include the API extensions, BIND, and Caddy plugins required for declarative platform configuration;
 - provide a reusable Caddy reverse-proxy module that maps a supplied domain to one or more internal upstreams;
 - provide a reusable edge-ingress module that translates interface ports 80 and 443 to local Caddy listeners without exposing the WebUI;
@@ -42,6 +43,8 @@ tofu/                      OpenTofu deployment configuration and examples
 guest/nocloud-bootstrap/   Guest-side NoCloud package and tests
 image/build.sh             Pinned-source Proxmox QCOW2 build entrypoint
 image/source-revisions.env.example Exact source revision configuration template
+scripts/verify_listeners.py Exact service listener runtime verifier
+examples/runtime-verification Listener contract and usage example
 modules/caddy-reverse-proxy Reusable domain-to-upstream Caddy module; DNS remains external
 modules/caddy-edge-ingress  Interface-scoped DNAT and firewall rules for local Caddy listeners
 examples/caddy-deployment  Dual-ingress composition with public ACME and internal split DNS
