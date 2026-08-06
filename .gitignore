@@ -16,10 +16,12 @@ id_ed25519
 id_ed25519.pub
 *.pem
 
-# Large source images.
+# Large source images and local image build metadata.
 *.qcow2
 *.raw
 *.img
+image/source-revisions.env
+image/build-manifest.json
 
 # Python test artifacts.
 __pycache__/

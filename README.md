@@ -40,7 +40,8 @@ tofu/                      OpenTofu deployment configuration and examples
   token.auto.tfvars.example API token example
   scripts/                  Local helpers used by OpenTofu
 guest/nocloud-bootstrap/   Guest-side NoCloud package and tests
-image/build.sh             Reproducible Proxmox QCOW2 build entrypoint
+image/build.sh             Pinned-source Proxmox QCOW2 build entrypoint
+image/source-revisions.env.example Exact source revision configuration template
 modules/caddy-reverse-proxy Reusable domain-to-upstream Caddy module; DNS remains external
 modules/caddy-edge-ingress  Interface-scoped DNAT and firewall rules for local Caddy listeners
 examples/caddy-deployment  Dual-ingress composition with public ACME and internal split DNS
@@ -75,20 +76,30 @@ tofu -chdir=tofu apply
 
 The repository contains both sides of the deployment contract. OpenTofu sends NoCloud data from the Proxmox side, while `os-nocloud-bootstrap` consumes it inside OPNsense.
 
-Build the QCOW2 on the OPNsense build host:
+Prepare exact source revisions on the OPNsense build host:
+
+```sh
+cp image/source-revisions.env.example image/source-revisions.env
+```
+
+Fill all five `*_COMMIT` values with full 40-character commit SHAs. The corresponding tools, core, ports, and src repositories must be on the configured branches, at those exact commits, and have clean working trees. The plugins commit only needs to exist in the local plugins repository because the wrapper archives the required plugin directories directly from that commit.
+
+Then build the QCOW2:
 
 ```sh
 ./image/build.sh
 ```
 
-The wrapper defaults to OPNsense `26.7.1`, the organization forks, and their `master` branches. Override `OPNSENSE_VERSION`, `GITBASE`, or an individual `*BRANCH` variable only when deliberately building another release or source tree.
+The wrapper defaults to OPNsense `26.7.1`, but it no longer accepts implicit moving source revisions. It snapshots these plugins from the configured `PLUGINS_COMMIT` before invoking the OPNsense image pipeline:
 
-The wrapper calls the OPNsense custom-image pipeline with:
-
-```sh
-make -C /usr/tools custom-vm,qcow2,20G,never,proxmox \
-  ADDITIONS="os-qemu-guest-agent os-api-extensions os-bind os-caddy /path/to/opnsense-proxmox/guest/nocloud-bootstrap /path/to/opnsense-proxmox/guest/caddy-policy"
+```text
+emulators/qemu-guest-agent
+sysutils/api-extensions
+dns/bind
+www/caddy
 ```
+
+The local NoCloud and Caddy policy packages are added from this repository. After a successful build, `image/build-manifest.json` records the exact commits, branches, image size, swap setting, profile, and plugin paths. This pins and records source inputs; it does not by itself claim byte-for-byte identical QCOW2 output across different build hosts.
 
 The local guest packages install:
 
@@ -246,7 +257,8 @@ Do not commit:
 - `terraform.tfvars`;
 - OpenTofu state;
 - private SSH keys;
-- QCOW2 or raw image files.
+- QCOW2 or raw image files;
+- `image/source-revisions.env` and generated `image/build-manifest.json`.
 
 The provided `.gitignore` excludes these files. State can still contain sensitive resource data, so store it in an appropriately protected backend.
 
