@@ -1,0 +1,41 @@
+{
+  "endpoints": [
+    {
+      "name": "public HTTP redirect",
+      "scheme": "http",
+      "host": "app.example.net",
+      "address": "198.51.100.80",
+      "port": 80,
+      "expected_status": 308,
+      "redirect_location": "https://app.example.net/",
+      "body_not_contains": ["OPNsense"]
+    },
+    {
+      "name": "public HTTPS",
+      "scheme": "https",
+      "host": "app.example.net",
+      "address": "198.51.100.80",
+      "port": 443,
+      "expected_status": 200,
+      "header_contains": {"server": "Caddy"},
+      "forbidden_headers": ["x-opnsense-version"],
+      "body_not_contains": ["OPNsense WebGUI"],
+      "expected_sans": ["app.example.net"],
+      "min_valid_days": 14
+    },
+    {
+      "name": "internal HTTPS",
+      "scheme": "https",
+      "host": "app.internal.example.net",
+      "address": "10.80.0.2",
+      "port": 443,
+      "ca_file": "../../trust/internal-ca.pem",
+      "expected_status": 200,
+      "header_contains": {"server": "Caddy"},
+      "forbidden_headers": ["x-opnsense-version"],
+      "body_not_contains": ["OPNsense WebGUI"],
+      "expected_sans": ["app.internal.example.net"],
+      "min_valid_days": 14
+    }
+  ]
+}

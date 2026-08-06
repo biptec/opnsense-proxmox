@@ -58,6 +58,9 @@ jobs:
       - name: Test authoritative DNS verifier
         run: python -m unittest scripts/test_verify_dns.py
 
+      - name: Test HTTPS verifier
+        run: python -m unittest scripts/test_verify_https.py
+
       - name: Initialize Caddy reverse proxy module
         run: tofu -chdir=modules/caddy-reverse-proxy init -backend=false -input=false
 

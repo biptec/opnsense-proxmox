@@ -16,6 +16,7 @@ The project keeps environment-specific settings outside the base image and suppo
 - enable QEMU Guest Agent integration for Proxmox by default;
 - verify exact runtime listener ownership from FreeBSD `sockstat` output;
 - verify primary/secondary authoritative DNS, DNSSEC, recursion isolation, transfers, and delegation;
+- verify HTTP(S) responses and certificates against explicit listener IP, SNI, and Host contracts;
 - include the API extensions, BIND, and Caddy plugins required for declarative platform configuration;
 - provide a reusable Caddy reverse-proxy module that maps a supplied domain to one or more internal upstreams;
 - provide a reusable edge-ingress module that translates interface ports 80 and 443 to local Caddy listeners without exposing the WebUI;
@@ -48,6 +49,8 @@ scripts/verify_listeners.py Exact service listener runtime verifier
 examples/runtime-verification Listener contract and usage example
 scripts/verify_dns.py       Authoritative DNS end-to-end verifier
 examples/dns-verification   Primary/secondary verification contract
+scripts/verify_https.py     Explicit-IP HTTP(S), SNI, certificate, and response verifier
+examples/https-verification Public/internal HTTPS verification contract
 modules/caddy-reverse-proxy Reusable domain-to-upstream Caddy module; DNS remains external
 modules/caddy-edge-ingress  Interface-scoped DNAT and firewall rules for local Caddy listeners
 examples/caddy-deployment  Dual-ingress composition with public ACME and internal split DNS
