@@ -46,4 +46,4 @@ done
 grep -Fx -- '-C' "$TMPDIR/arguments" >/dev/null
 grep -Fx -- "$TMPDIR/tools" "$TMPDIR/arguments" >/dev/null
 grep -Fx -- 'custom-vm,qcow2,24G,1G,proxmox' "$TMPDIR/arguments" >/dev/null
-grep -Fx -- "ADDITIONS=os-qemu-guest-agent os-caddy $EXPECTED_PLUGIN $EXPECTED_CADDY_POLICY" "$TMPDIR/arguments" >/dev/null
+grep -Fx -- "ADDITIONS=os-qemu-guest-agent os-api-extensions os-bind os-caddy $EXPECTED_PLUGIN $EXPECTED_CADDY_POLICY" "$TMPDIR/arguments" >/dev/null

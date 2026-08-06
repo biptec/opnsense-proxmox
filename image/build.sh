@@ -30,4 +30,4 @@ CADDY_POLICY_DIR="$ROOT_DIR/guest/caddy-policy"
 
 exec make -C "$TOOLS_DIR" \
     "custom-vm,qcow2,$IMAGE_SIZE,$IMAGE_SWAP,proxmox" \
-    ADDITIONS="os-qemu-guest-agent os-caddy $PLUGIN_DIR $CADDY_POLICY_DIR"
+    ADDITIONS="os-qemu-guest-agent os-api-extensions os-bind os-caddy $PLUGIN_DIR $CADDY_POLICY_DIR"
