@@ -1,0 +1,19 @@
+{
+  "zone": "example.net",
+  "primary": "192.0.2.53",
+  "secondary": "198.51.100.54",
+  "authoritative_probe": {
+    "name": "www.example.net",
+    "type": "A",
+    "expected_values": ["203.0.113.20"]
+  },
+  "recursion_probe": {
+    "name": "example.org",
+    "type": "A"
+  },
+  "secondary_sync_timeout_seconds": 180,
+  "transfer_tsig": {
+    "name": "secondary-transfer.example.net",
+    "algorithm": "hmac-sha256"
+  }
+}
