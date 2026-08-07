@@ -34,6 +34,19 @@ resource "terraform_data" "listener_contract" {
     }
 
     precondition {
+      condition     = cidrcontains("${var.wan_primary_address}/${var.wan_primary_prefix}", var.wan_gateway)
+      error_message = "The WAN gateway must be on-link through the primary WAN prefix."
+    }
+
+    precondition {
+      condition = alltrue([
+        cidrcontains("${var.wan_primary_address}/${var.wan_primary_prefix}", var.public_dns_address),
+        cidrcontains("${var.wan_primary_address}/${var.wan_primary_prefix}", var.public_caddy_address),
+      ])
+      error_message = "Public DNS and Caddy /32 aliases must be inside the connected primary WAN subnet."
+    }
+
+    precondition {
       condition     = var.bind_enabled != true || var.public_dns_vip_enabled
       error_message = "BIND cannot be enabled while the public DNS VIP is detached. Activate the VIP only as part of the guarded DNS cutover."
     }
@@ -86,7 +99,10 @@ resource "opnsense_interfaces_vip" "public_dns" {
   no_expand   = false
   description = "Public DNS service address"
 
-  depends_on = [terraform_data.listener_contract]
+  depends_on = [
+    terraform_data.listener_contract,
+    opnsense_ntp_settings.internal,
+  ]
 }
 
 resource "opnsense_interfaces_vip" "public_caddy" {
@@ -99,7 +115,10 @@ resource "opnsense_interfaces_vip" "public_caddy" {
   no_expand   = false
   description = "Public Caddy service address"
 
-  depends_on = [terraform_data.listener_contract]
+  depends_on = [
+    terraform_data.listener_contract,
+    opnsense_ntp_settings.internal,
+  ]
 }
 
 resource "opnsense_bind_settings" "main" {

@@ -10,10 +10,12 @@ mock_provider "opnsense" {
 variables {
   wan_interface            = "wan"
   management_address       = "10.0.0.1"
-  wan_primary_address      = "192.0.2.10"
+  wan_primary_address      = "198.51.100.112"
+  wan_primary_prefix       = 26
+  wan_gateway              = "198.51.100.65"
   api_extensions_plugin_id = "os-api-extensions"
-  public_dns_address       = "198.51.100.53"
-  public_caddy_address     = "198.51.100.80"
+  public_dns_address       = "198.51.100.88"
+  public_caddy_address     = "198.51.100.87"
 
   service_addresses = {
     dns   = "10.53.0.2"
@@ -55,7 +57,7 @@ run "listener_ownership" {
       !opnsense_bind_settings.main.enabled &&
       opnsense_bind_settings.main.port == 53 &&
       opnsense_bind_settings.main.disable_ipv6 &&
-      opnsense_bind_settings.main.listen_ipv4 == toset(["198.51.100.53", "10.53.0.2"]) &&
+      opnsense_bind_settings.main.listen_ipv4 == toset(["198.51.100.88", "10.53.0.2"]) &&
       opnsense_bind_settings.main.listen_ipv6 == toset(["::1"])
     )
     error_message = "BIND must start disabled and own only its public and internal addresses."
@@ -64,7 +66,7 @@ run "listener_ownership" {
   assert {
     condition = (
       !opnsense_caddy_settings.main.enabled &&
-      opnsense_caddy_settings.main.listen_addresses == toset(["198.51.100.80", "10.80.0.2"]) &&
+      opnsense_caddy_settings.main.listen_addresses == toset(["198.51.100.87", "10.80.0.2"]) &&
       opnsense_caddy_settings.main.http_port == 80 &&
       opnsense_caddy_settings.main.https_port == 443
     )
@@ -107,9 +109,9 @@ run "explicit_public_vips" {
 
   assert {
     condition = (
-      opnsense_interfaces_vip.public_dns[0].network == "198.51.100.53/32" &&
+      opnsense_interfaces_vip.public_dns[0].network == "198.51.100.88/32" &&
       !opnsense_interfaces_vip.public_dns[0].no_bind &&
-      opnsense_interfaces_vip.public_caddy[0].network == "198.51.100.80/32" &&
+      opnsense_interfaces_vip.public_caddy[0].network == "198.51.100.87/32" &&
       !opnsense_interfaces_vip.public_caddy[0].no_bind
     )
     error_message = "Explicit public VIP activation must create separate bindable WAN IP Aliases."
@@ -173,7 +175,7 @@ run "reject_wan_primary_address_reuse" {
   command = plan
 
   variables {
-    public_caddy_address = "192.0.2.10"
+    public_caddy_address = "198.51.100.112"
   }
 
   expect_failures = [terraform_data.listener_contract]
@@ -183,7 +185,7 @@ run "reject_duplicate_listener_address" {
   command = plan
 
   variables {
-    public_caddy_address = "198.51.100.53"
+    public_caddy_address = "198.51.100.88"
   }
 
   expect_failures = [terraform_data.listener_contract]
@@ -247,4 +249,24 @@ run "reject_missing_ntp_interface" {
   }
 
   expect_failures = [var.service_interfaces]
+}
+
+run "reject_offlink_wan_gateway" {
+  command = plan
+
+  variables {
+    wan_gateway = "203.0.113.1"
+  }
+
+  expect_failures = [terraform_data.listener_contract]
+}
+
+run "reject_offlink_public_service_alias" {
+  command = plan
+
+  variables {
+    public_dns_address = "203.0.113.88"
+  }
+
+  expect_failures = [terraform_data.listener_contract]
 }

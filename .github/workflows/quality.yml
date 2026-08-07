@@ -90,6 +90,12 @@ jobs:
       - name: Test router services module
         run: tofu -chdir=modules/router-services test
 
+      - name: Initialize router egress module
+        run: tofu -chdir=modules/router-egress init -backend=false -input=false
+
+      - name: Test router egress module
+        run: tofu -chdir=modules/router-egress test
+
       - name: Initialize Caddy reverse proxy module
         run: tofu -chdir=modules/caddy-reverse-proxy init -backend=false -input=false
 
