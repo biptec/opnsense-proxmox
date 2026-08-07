@@ -19,31 +19,31 @@ output "service_addresses" {
 }
 
 output "router_addresses" {
-  description = "Permanent host .1 router gateway for every service VLAN."
+  description = "Reserved host .1 router gateway used when a service is externalized to its VLAN."
   value       = local.router_addresses
 }
 
 output "service_interfaces" {
-  description = "Logical OPNsense interface allocated to every service VLAN."
+  description = "Logical OPNsense interface currently hosting each service endpoint: loopback while local, service VLAN after externalization."
   value = {
     for name, assignment in opnsense_interfaces_assignment.service : name => assignment.name
   }
 }
 
 output "service_vlan_ids" {
-  description = "VLAN ID allocated to every isolated service network."
+  description = "Reserved VLAN ID for every isolated service network; the VLAN exists only after externalization."
   value = {
     for name, network in var.service_networks : name => network.vlan_id
   }
 }
 
 output "service_vlan_devices" {
-  description = "Deterministic FreeBSD VLAN device allocated to every service network."
+  description = "Reserved deterministic FreeBSD VLAN device name for every service network; created only after externalization."
   value       = local.service_vlan_devices
 }
 
 output "router_hosted_service_addresses" {
-  description = "Service addresses currently held as IP Alias VIPs by OPNsense."
+  description = "Service host .2 addresses currently assigned with /30 prefixes to dedicated OPNsense loopbacks."
   value = {
     for name, network in local.router_hosted_networks : name => local.service_addresses[name]
   }

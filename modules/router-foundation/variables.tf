@@ -24,7 +24,7 @@ variable "management_address" {
 }
 
 variable "trunk_parent_device" {
-  description = "Physical trunk device that carries all service VLANs."
+  description = "Physical trunk device used when a router-hosted service is externalized to its reserved VLAN."
   type        = string
 
   validation {
@@ -111,13 +111,13 @@ variable "ssh" {
 }
 
 variable "allow_service_readdress" {
-  description = "Explicitly permit changes to a permanent service VLAN assignment or router gateway address."
+  description = "Explicitly permit service endpoint migration between loopback .2/30 and VLAN gateway .1/30, or other service readdressing."
   type        = bool
   default     = false
 }
 
 variable "service_networks" {
-  description = "One VLAN and one canonical IPv4 /30 per movable service. Host .1 is the permanent router gateway and host .2 is the service address."
+  description = "One reserved VLAN and one canonical IPv4 /30 per movable service. While hosted on OPNsense, .2/30 lives on loopback. After externalization, .1/30 becomes the router VLAN gateway and .2/30 moves to the service VM."
   type = map(object({
     vlan_id          = number
     subnet           = string

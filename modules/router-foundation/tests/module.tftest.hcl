@@ -1,4 +1,11 @@
 mock_provider "opnsense" {
+  mock_resource "opnsense_interfaces_loopback" {
+    defaults = {
+      id        = "00000000-0000-4000-8000-000000000010"
+      device_id = 10
+    }
+  }
+
   mock_resource "opnsense_interfaces_vlan" {
     defaults = {
       id = "11111111-1111-4111-8111-111111111111"
@@ -9,13 +16,6 @@ mock_provider "opnsense" {
     defaults = {
       id   = "opt10"
       name = "opt10"
-    }
-  }
-
-  mock_resource "opnsense_interfaces_vip" {
-    defaults = {
-      id      = "22222222-2222-4222-8222-222222222222"
-      address = "10.53.0.2"
     }
   }
 }
@@ -66,40 +66,48 @@ run "management_and_service_ownership" {
       !opnsense_system_ssh.management.password_authentication &&
       !opnsense_system_ssh.management.permit_root_login
     )
-    error_message = "WebGUI/API and SSH must be restricted to the management interface with safe defaults."
+    error_message = "WebGUI/API and SSH must be restricted to the dedicated management interface with safe defaults."
   }
 
   assert {
     condition = (
-      opnsense_interfaces_vlan.service["dns"].parent == "vtnet1" &&
-      opnsense_interfaces_vlan.service["dns"].tag == 210 &&
-      opnsense_interfaces_vlan.service["dns"].protocol == "802.1q" &&
-      opnsense_interfaces_vlan.service["dns"].device == "vlan210"
+      length(opnsense_interfaces_loopback.service) == 2 &&
+      contains(keys(opnsense_interfaces_loopback.service), "dns") &&
+      contains(keys(opnsense_interfaces_loopback.service), "ntp") &&
+      !contains(keys(opnsense_interfaces_loopback.service), "caddy")
     )
-    error_message = "Every service must receive a deterministic VLAN on the tagged trunk."
+    error_message = "Router-hosted services must use dedicated loopbacks and must not create their service VLANs yet."
   }
 
   assert {
     condition = (
-      opnsense_interfaces_assignment.service["dns"].device == "vlan210" &&
-      opnsense_interfaces_assignment.service["dns"].ipv4.address == "10.53.0.1" &&
+      opnsense_interfaces_assignment.service["dns"].device == "lo10" &&
+      opnsense_interfaces_assignment.service["dns"].ipv4.address == "10.53.0.2" &&
       opnsense_interfaces_assignment.service["dns"].ipv4.prefix == 30 &&
       opnsense_interfaces_assignment.service["dns"].ipv6.mode == "none" &&
       !opnsense_interfaces_assignment.service["dns"].allow_readdress
     )
-    error_message = "The router must permanently own host .1 on the dedicated service VLAN."
+    error_message = "A router-hosted service must own its stable .2/30 endpoint on loopback."
   }
 
   assert {
     condition = (
-      opnsense_interfaces_vip.service["dns"].network == "10.53.0.2/32" &&
-      opnsense_interfaces_vip.service["dns"].interface == "opt10" &&
-      !opnsense_interfaces_vip.service["dns"].no_bind &&
-      opnsense_interfaces_vip.service["dns"].no_expand &&
-      length(opnsense_interfaces_vip.service) == 2 &&
-      !contains(keys(opnsense_interfaces_vip.service), "caddy")
+      length(opnsense_interfaces_vlan.service) == 1 &&
+      opnsense_interfaces_vlan.service["caddy"].parent == "vtnet1" &&
+      opnsense_interfaces_vlan.service["caddy"].tag == 211 &&
+      opnsense_interfaces_vlan.service["caddy"].device == "vlan211" &&
+      !contains(keys(opnsense_interfaces_vlan.service), "dns")
     )
-    error_message = "Only router-hosted services may hold their portable host .2 address as a bindable IP Alias."
+    error_message = "A service VLAN must exist only after that service is externalized from OPNsense."
+  }
+
+  assert {
+    condition = (
+      opnsense_interfaces_assignment.service["caddy"].device == "vlan211" &&
+      opnsense_interfaces_assignment.service["caddy"].ipv4.address == "10.80.0.1" &&
+      opnsense_interfaces_assignment.service["caddy"].ipv4.prefix == 30
+    )
+    error_message = "After externalization, OPNsense must own .1/30 as the service VLAN gateway."
   }
 
   assert {
@@ -115,7 +123,7 @@ run "management_and_service_ownership" {
         ntp = "10.123.0.2"
       }
     )
-    error_message = "Router, portable service, interface, VLAN, and ownership outputs must be deterministic."
+    error_message = "Portable service, reserved gateway, interface, VLAN, and ownership outputs must stay deterministic."
   }
 }
 

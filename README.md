@@ -49,7 +49,7 @@ scripts/verify_listeners.py Exact service listener runtime verifier
 examples/runtime-verification Listener contract and usage example
 scripts/verify_dns.py       Authoritative DNS end-to-end verifier
 examples/dns-verification   Primary/secondary verification contract
-modules/router-foundation    Management listeners and one tagged /30 VLAN per movable service
+modules/router-foundation    Management listeners and loopback-first /30 service endpoints
 modules/router-services      Public VIPs and explicit DNS, NTP, and Caddy listeners
 modules/caddy-reverse-proxy Reusable domain-to-upstream Caddy module; DNS remains external
 modules/caddy-edge-ingress  Interface-scoped DNAT and firewall rules for local Caddy listeners
@@ -124,7 +124,7 @@ The source remains in this repository; it is not stored in the OPNsense core for
 
 ## Router foundation module
 
-`modules/router-foundation` owns the `os-api-extensions` package, management-only WebGUI/API and SSH bindings, and one tagged IPv4 `/30` per movable service. OPNsense permanently owns `.1/30` as the service VLAN gateway and holds `.2` as a bindable IP Alias only while the service runs locally. A later move removes that alias and assigns the unchanged `.2/30` address to the service VM. DNS zones, service configuration, public VIPs, firewall policy and NAT stay outside this foundation layer.
+`modules/router-foundation` owns the `os-api-extensions` package, management-only WebGUI/API and SSH bindings, and one reserved IPv4 `/30` plus VLAN ID per movable service. While a service runs on OPNsense, its stable `.2/30` endpoint lives on a dedicated loopback and the service VLAN is not active. When the service is externalized, OPNsense moves to `.1/30` on the reserved VLAN and the VM receives the unchanged `.2/30`. DNS zones, service configuration, public VIPs, firewall policy and NAT stay outside this foundation layer.
 
 ## Router services module
 

@@ -19,6 +19,6 @@ output "caddy_listener_addresses" {
 }
 
 output "ntp_service_address" {
-  description = "Internal NTP service address served on the dedicated service VLAN interface."
+  description = "Internal NTP service address served on the dedicated loopback while router-hosted."
   value       = local.internal_ntp_address
 }

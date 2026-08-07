@@ -9,6 +9,10 @@ locals {
     for name, network in var.service_networks : name => network
     if network.hosted_on_router
   }
+  externalized_networks = {
+    for name, network in var.service_networks : name => network
+    if !network.hosted_on_router
+  }
   service_vlan_devices = {
     for name, network in var.service_networks : name => "vlan${network.vlan_id}"
   }
@@ -61,8 +65,16 @@ resource "opnsense_system_ssh" "management" {
   depends_on = [opnsense_plugin.api_extensions]
 }
 
+resource "opnsense_interfaces_loopback" "service" {
+  for_each = local.router_hosted_networks
+
+  description = "${title(replace(each.key, "_", " "))} local service network"
+
+  depends_on = [terraform_data.address_contract]
+}
+
 resource "opnsense_interfaces_vlan" "service" {
-  for_each = var.service_networks
+  for_each = local.externalized_networks
 
   parent      = var.trunk_parent_device
   tag         = each.value.vlan_id
@@ -77,8 +89,8 @@ resource "opnsense_interfaces_vlan" "service" {
 resource "opnsense_interfaces_assignment" "service" {
   for_each = var.service_networks
 
-  device            = opnsense_interfaces_vlan.service[each.key].device
-  description       = "${title(replace(each.key, "_", " "))} service gateway"
+  device            = each.value.hosted_on_router ? format("lo%d", opnsense_interfaces_loopback.service[each.key].device_id) : opnsense_interfaces_vlan.service[each.key].device
+  description       = each.value.hosted_on_router ? "${title(replace(each.key, "_", " "))} local service" : "${title(replace(each.key, "_", " "))} service gateway"
   enabled           = true
   allow_readdress   = var.allow_service_readdress
   locked            = false
@@ -88,22 +100,11 @@ resource "opnsense_interfaces_assignment" "service" {
 
   ipv4 = {
     mode    = "static"
-    address = local.router_addresses[each.key]
+    address = each.value.hosted_on_router ? local.service_addresses[each.key] : local.router_addresses[each.key]
     prefix  = 30
   }
 
   ipv6 = {
     mode = "none"
   }
-}
-
-resource "opnsense_interfaces_vip" "service" {
-  for_each = local.router_hosted_networks
-
-  mode        = "ipalias"
-  interface   = opnsense_interfaces_assignment.service[each.key].name
-  network     = "${local.service_addresses[each.key]}/32"
-  no_bind     = false
-  no_expand   = true
-  description = "${title(replace(each.key, "_", " "))} local service address"
 }

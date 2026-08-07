@@ -22,9 +22,9 @@ variables {
   }
 
   service_interfaces = {
-    dns   = "opt1"
-    ntp   = "opt2"
-    caddy = "opt3"
+    dns   = "lo10"
+    ntp   = "lo11"
+    caddy = "lo12"
   }
 
   bind_enabled = false
@@ -74,7 +74,7 @@ run "listener_ownership" {
   assert {
     condition = (
       opnsense_ntp_settings.internal.enabled &&
-      opnsense_ntp_settings.internal.interfaces == toset(["opt2"]) &&
+      opnsense_ntp_settings.internal.interfaces == toset(["lo11"]) &&
       opnsense_ntp_settings.internal.kiss_of_death &&
       opnsense_ntp_settings.internal.rate_limiting &&
       opnsense_ntp_settings.internal.deny_modifications &&
@@ -241,8 +241,8 @@ run "reject_missing_ntp_interface" {
 
   variables {
     service_interfaces = {
-      dns   = "opt1"
-      caddy = "opt3"
+      dns   = "lo10"
+      caddy = "lo12"
     }
   }
 
