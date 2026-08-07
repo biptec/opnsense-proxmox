@@ -38,6 +38,31 @@ variable "wan_primary_address" {
   }
 }
 
+variable "wan_primary_prefix" {
+  description = "IPv4 prefix length of the primary WAN address. It provides the connected route used by the public /32 service aliases."
+  type        = number
+
+  validation {
+    condition     = var.wan_primary_prefix == floor(var.wan_primary_prefix) && var.wan_primary_prefix >= 1 && var.wan_primary_prefix <= 32
+    error_message = "wan_primary_prefix must be an integer from 1 to 32."
+  }
+}
+
+variable "wan_gateway" {
+  description = "Provider-facing IPv4 gateway that must be on-link through the primary WAN prefix."
+  type        = string
+
+  validation {
+    condition = (
+      !strcontains(var.wan_gateway, "/") &&
+      can(cidrnetmask("${var.wan_gateway}/32")) &&
+      var.wan_gateway != "0.0.0.0" &&
+      !startswith(var.wan_gateway, "127.")
+    )
+    error_message = "wan_gateway must be a non-wildcard IPv4 address without a prefix."
+  }
+}
+
 variable "api_extensions_plugin_id" {
   description = "Dependency token exported by the router-foundation module."
   type        = string

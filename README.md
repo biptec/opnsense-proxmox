@@ -51,6 +51,7 @@ scripts/verify_dns.py       Authoritative DNS end-to-end verifier
 examples/dns-verification   Primary/secondary verification contract
 modules/router-foundation    Management listeners and loopback-first /30 service endpoints
 modules/router-services      Public VIPs and explicit DNS, NTP, and Caddy listeners
+modules/router-egress        Dedicated outbound NAT identity and routed-public NO-NAT policy
 modules/caddy-reverse-proxy Reusable domain-to-upstream Caddy module; DNS remains external
 modules/caddy-edge-ingress  Interface-scoped DNAT and firewall rules for local Caddy listeners
 examples/caddy-deployment  Dual-ingress composition with public ACME and internal split DNS
@@ -128,7 +129,9 @@ The source remains in this repository; it is not stored in the OPNsense core for
 
 ## Router services module
 
-`modules/router-services` owns the public DNS and Caddy VIP definitions, explicit BIND and Caddy listener addresses, and the hardened NTP service binding. Public WAN aliases remain detached by default and require explicit activation when their cutover and ingress policy are ready. BIND active-service ownership remains reserved for the DNS cutover layer; Caddy remains disabled until its dependent site layer is present. DNS cutover and firewall policy are deliberately excluded so they can be applied with their dependent configuration on the actual ingress interfaces.
+`modules/router-services` owns the public DNS and Caddy VIP definitions, explicit BIND and Caddy listener addresses, and the hardened NTP service binding. Public WAN aliases remain detached by default and require explicit activation when their cutover and ingress policy are ready. BIND active-service ownership remains reserved for the DNS cutover layer; Caddy remains disabled until its dependent site layer is present. DNS cutover and ingress firewall policy are deliberately excluded so they can be applied with their dependent configuration on the actual ingress interfaces.
+
+`modules/router-egress` owns the dedicated outbound NAT `/32` identity, selected internal egress networks, deterministic NO-NAT rules for routed public subnets, and the later dedicated Source NAT rule. The egress VIP uses `no_bind = true` and both the VIP and NAT policy stay detached until an explicit platform cutover.
 
 ## Caddy reverse-proxy module
 
