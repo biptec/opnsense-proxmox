@@ -2,19 +2,30 @@ locals {
   internal_dns_address   = try(var.service_addresses["dns"], "")
   internal_ntp_address   = try(var.service_addresses["ntp"], "")
   internal_caddy_address = try(var.service_addresses["caddy"], "")
+  internal_dns_ipv6      = try(var.service_ipv6_addresses["dns"], "")
+  internal_ntp_ipv6      = try(var.service_ipv6_addresses["ntp"], "")
+  internal_caddy_ipv6    = try(var.service_ipv6_addresses["caddy"], "")
 
   bind_listener_addresses = [
     var.public_dns_address,
     local.internal_dns_address,
   ]
-  caddy_listener_addresses = [
+  bind_listener_ipv6 = compact([
+    "::1",
+    local.internal_dns_ipv6,
+  ])
+  caddy_listener_addresses = concat([
     var.public_caddy_address,
     local.internal_caddy_address,
-  ]
+    ], compact([
+      local.internal_caddy_ipv6,
+  ]))
   all_listener_addresses = concat(
     local.bind_listener_addresses,
+    local.bind_listener_ipv6,
     local.caddy_listener_addresses,
     [local.internal_ntp_address],
+    compact([local.internal_ntp_ipv6]),
   )
 }
 
@@ -123,9 +134,9 @@ resource "opnsense_interfaces_vip" "public_caddy" {
 
 resource "opnsense_bind_settings" "main" {
   enabled              = var.bind_enabled
-  disable_ipv6         = true
+  disable_ipv6         = local.internal_dns_ipv6 == ""
   listen_ipv4          = local.bind_listener_addresses
-  listen_ipv6          = ["::1"]
+  listen_ipv6          = local.bind_listener_ipv6
   port                 = 53
   hide_hostname        = true
   hide_version         = true

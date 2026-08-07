@@ -1,0 +1,214 @@
+management_interface      = "lan"
+management_ipv4_address    = "10.16.214.2"
+management_web_ipv4_cidr   = "10.16.214.6/30"
+management_ssh_ipv6_cidr   = "2a07:e580:a10:d600::2/64"
+management_web_ipv6_cidr   = "2a07:e580:a10:d604::2/64"
+trunk_parent_device        = "vtnet1"
+
+# Null means: preserve the certificate already used by WebGUI. The helper reads
+# its reference through os-api-extensions using the same OPNSENSE_* environment
+# variables as the provider.
+webgui_certificate_ref = null
+
+wan = {
+  vlan_id                   = 3801
+  primary_address           = "138.201.128.112"
+  primary_prefix            = 26
+  gateway                   = "138.201.128.65"
+  public_caddy_address      = "138.201.128.87"
+  public_dns_address        = "138.201.128.88"
+  dedicated_egress_address  = "138.201.128.95"
+}
+
+routed_networks = {
+  host_eiger = {
+    vlan_id        = 501
+    subnet         = "10.16.216.0/30"
+    router_address = "10.16.216.1"
+    description    = "Eiger host management"
+  }
+  host_monch = {
+    vlan_id        = 502
+    subnet         = "10.16.218.0/30"
+    router_address = "10.16.218.1"
+    description    = "Monch host management"
+  }
+  host_pelmo = {
+    vlan_id        = 503
+    subnet         = "10.16.208.0/30"
+    router_address = "10.16.208.1"
+    description    = "Pelmo host management"
+  }
+  host_aneto = {
+    vlan_id        = 504
+    subnet         = "10.16.210.0/30"
+    router_address = "10.16.210.1"
+    description    = "Aneto host management"
+  }
+  host_ushba = {
+    vlan_id        = 505
+    subnet         = "10.16.212.0/30"
+    router_address = "10.16.212.1"
+    description    = "Ushba host management"
+  }
+  host_pizol = {
+    vlan_id        = 507
+    subnet         = "10.16.220.0/30"
+    router_address = "10.16.220.1"
+    description    = "Pizol host management"
+  }
+  host_rigi = {
+    vlan_id             = 508
+    subnet              = "10.16.222.0/30"
+    router_address      = "10.16.222.1"
+    ipv6_subnet         = "2a07:e580:a10:de00::/64"
+    router_ipv6_address = "2a07:e580:a10:de00::1"
+    description         = "Rigi host management"
+  }
+
+  svc_castor = {
+    vlan_id        = 2801
+    subnet         = "10.16.16.88/30"
+    router_address = "10.16.16.89"
+    description    = "Castor directory service"
+  }
+  svc_pollux = {
+    vlan_id        = 2802
+    subnet         = "10.16.18.88/30"
+    router_address = "10.16.18.89"
+    description    = "Pollux directory service"
+  }
+  svc_alcor = {
+    vlan_id             = 2804
+    subnet              = "10.16.18.52/30"
+    router_address      = "10.16.18.54"
+    ipv6_subnet         = "2a07:e580:a10:1234::/64"
+    router_ipv6_address = "2a07:e580:a10:1234::1"
+    description         = "Alcor secondary DNS"
+  }
+  svc_altair = {
+    vlan_id        = 2805
+    subnet         = "10.16.20.44/30"
+    router_address = "10.16.20.45"
+    description    = "Altair Uyuni"
+  }
+
+  svc_sirius = {
+    vlan_id        = 2808
+    subnet         = "10.16.20.80/30"
+    router_address = "10.16.20.81"
+    description    = "Sirius OpenBao"
+  }
+  svc_mira = {
+    vlan_id        = 2809
+    subnet         = "10.16.22.80/30"
+    router_address = "10.16.22.81"
+    description    = "Mira OpenBao"
+  }
+  svc_capella = {
+    vlan_id        = 2810
+    subnet         = "10.16.24.80/30"
+    router_address = "10.16.24.81"
+    description    = "Capella OpenBao"
+  }
+  svc_rigel = {
+    vlan_id        = 2811
+    subnet         = "10.16.20.12/30"
+    router_address = "10.16.20.13"
+    description    = "Rigel Terrakube"
+  }
+  svc_spica = {
+    vlan_id        = 2812
+    subnet         = "10.16.22.12/30"
+    router_address = "10.16.22.13"
+    description    = "Spica Terrakube"
+  }
+  svc_avior = {
+    vlan_id        = 2813
+    subnet         = "10.16.24.12/30"
+    router_address = "10.16.24.13"
+    description    = "Avior Terrakube"
+  }
+  svc_regulus = {
+    vlan_id        = 2814
+    subnet         = "10.16.20.4/30"
+    router_address = "10.16.20.5"
+    description    = "Regulus PDM"
+  }
+  svc_antares = {
+    vlan_id        = 2815
+    subnet         = "10.16.22.4/30"
+    router_address = "10.16.22.5"
+    description    = "Antares PDM"
+  }
+  svc_canopus = {
+    vlan_id        = 2816
+    subnet         = "10.16.24.4/30"
+    router_address = "10.16.24.5"
+    description    = "Canopus PDM"
+  }
+
+  svc_vela = {
+    vlan_id        = 2817
+    subnet         = "10.16.26.0/30"
+    router_address = "10.16.26.1"
+    description    = "Vela VPN"
+  }
+  svc_janus = {
+    vlan_id        = 2818
+    subnet         = "10.16.26.20/30"
+    router_address = "10.16.26.21"
+    description    = "Janus SSH bastion"
+  }
+  svc_kochab = {
+    vlan_id             = 2820
+    subnet              = "10.16.18.120/30"
+    router_address      = "10.16.18.121"
+    ipv6_subnet         = "2a07:e580:a10:1278::/64"
+    router_ipv6_address = "2a07:e580:a10:1278::1"
+    description         = "Kochab secondary NTP"
+  }
+
+  transport_public_routed = {
+    vlan_id        = 3802
+    subnet         = "5.9.227.112/29"
+    router_address = "5.9.227.113"
+    description    = "Routed public transport"
+  }
+}
+
+service_networks = {
+  dns = {
+    vlan_id           = 2803
+    subnet            = "10.16.16.52/30"
+    service_ipv4_host = 1
+    ipv6_subnet       = "2a07:e580:a10:1034::/64"
+  }
+  ntp = {
+    vlan_id     = 2819
+    subnet      = "10.16.16.120/30"
+    ipv6_subnet = "2a07:e580:a10:1078::/64"
+  }
+  caddy = {
+    vlan_id     = 2821
+    subnet      = "10.16.16.80/30"
+    ipv6_subnet = "2a07:e580:a10:1050::/64"
+  }
+  nat = {
+    vlan_id     = 2822
+    subnet      = "10.16.16.92/30"
+    ipv6_subnet = "2a07:e580:a10:105c::/64"
+  }
+}
+
+internal_egress_networks = ["10.0.0.0/8"]
+routed_public_subnets   = ["5.9.227.112/29"]
+
+vpn_client_route = {
+  network         = "10.198.0.0/24"
+  via_network_key = "svc_vela"
+  gateway_address = "10.16.26.2"
+}
+
+# Activation stays false until the explicit DNS/firewall/egress cutover stage.
+cutover = {}

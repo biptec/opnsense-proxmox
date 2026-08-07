@@ -1,0 +1,18 @@
+# Etna-specific network identity. Combine this file with the existing local
+# Proxmox endpoint/node/storage/image values used by the current test VM.
+vm_name    = "etna"
+bridge     = "vmbr0"
+dns_domain = "host.biptec.net"
+
+management_ipv4 = {
+  mode    = "static"
+  address = "10.16.214.2/30"
+}
+
+# The second VirtIO NIC is a tagged trunk. Do not set vlan_id here; VLANs are
+# created inside OPNsense on vtnet1.
+additional_nics = [
+  {
+    bridge = "vmbr1"
+  }
+]

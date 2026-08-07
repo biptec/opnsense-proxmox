@@ -96,6 +96,15 @@ jobs:
       - name: Test router egress module
         run: tofu -chdir=modules/router-egress test
 
+      - name: Initialize primary router platform root
+        run: tofu -chdir=platform/primary-router init -backend=false -input=false
+
+      - name: Test primary router platform root
+        run: tofu -chdir=platform/primary-router test
+
+      - name: Verify primary router production-like values
+        run: platform/primary-router/scripts/verify-example.py
+
       - name: Initialize Caddy reverse proxy module
         run: tofu -chdir=modules/caddy-reverse-proxy init -backend=false -input=false
 

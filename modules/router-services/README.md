@@ -3,8 +3,8 @@
 This module owns the shared service listeners that run on the primary OPNsense router:
 
 - opt-in public DNS and Caddy IP Alias addresses on WAN;
-- BIND on the public DNS VIP and the internal DNS service address; IPv6 execution is disabled while `::1` remains as the required os-bind listener placeholder;
-- Caddy on the public Caddy VIP and the internal Caddy `/30` address;
+- BIND on the public DNS VIP and the internal DNS service address; when a dual-stack service endpoint is supplied, BIND also listens on that internal IPv6 address while retaining the required `::1` os-bind listener;
+- Caddy on the public Caddy VIP and the internal Caddy service addresses;
 - NTP synchronization on the dedicated service interface, with client serving disabled by default;
 - the `os-bind` and `os-caddy` packages;
 
@@ -16,7 +16,7 @@ NTP is configured on its dedicated service interface before either public WAN al
 
 Public WAN aliases are detached by default. This is especially important for DNS: the active legacy Unbound resolver normally has wildcard port-53 sockets, so attaching the public DNS address before the guarded cutover would immediately make that address a local Unbound destination even while BIND stays disabled. Set `public_dns_vip_enabled = true` only in the staged DNS cutover where ingress policy and service ownership are ordered together. Likewise set `public_caddy_vip_enabled = true` only when Caddy configuration and ingress policy are ready. The module refuses `bind_enabled = true` or `caddy_enabled = true` while the corresponding public VIP remains detached.
 
-OPNsense `ntpd` binds the addresses of the selected service interface. While NTP is router-hosted, that interface is the dedicated loopback carrying only the portable `.2/30` endpoint. Keep `ntp_serve_clients = false` until ingress firewall policy permits UDP/123 to that service address. When NTP is externalized, the loopback is removed, the reserved service VLAN is activated with `.1/30` on OPNsense, and the unchanged `.2/30` moves to the NTP VM.
+OPNsense `ntpd` binds the addresses of the selected service interface. While NTP is router-hosted, that interface is the dedicated loopback carrying only the portable IPv4 endpoint and, when configured, its IPv6 `::2/64` endpoint. Keep `ntp_serve_clients = false` until ingress firewall policy permits UDP/123 to that service address. When NTP is externalized, the loopback is removed, the reserved service VLAN is activated with `.1/30` on OPNsense, and the unchanged `.2/30` moves to the NTP VM.
 
 The module also does not disable Unbound or dnsmasq. That cutover belongs to the later DNS layer, where views and zones can be created before port 53 changes ownership.
 
