@@ -26,6 +26,9 @@ mock_provider "opnsense" {
   mock_resource "opnsense_bind_record" {
     defaults = { id = "88888888-8888-4888-8888-888888888888" }
   }
+  mock_resource "opnsense_bind_tsig_key" {
+    defaults = { id = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }
+  }
   mock_resource "opnsense_firewall_alias" {
     defaults = { id = "99999999-9999-4999-8999-999999999999" }
   }
@@ -247,4 +250,57 @@ run "reject_public_dns_vip_while_unbound_owns_port" {
   }
 
   expect_failures = [terraform_data.platform_contract]
+}
+
+run "secondary_dns_integration" {
+  command = plan
+
+  variables {
+    routed_networks = {
+      host_rigi  = { vlan_id = 508, subnet = "10.16.222.0/30", router_address = "10.16.222.1", description = "Rigi management" }
+      svc_alcor  = { vlan_id = 2804, subnet = "10.16.18.52/30", router_address = "10.16.18.54", description = "Alcor DNS2" }
+      svc_kochab = { vlan_id = 2820, subnet = "10.16.18.120/30", router_address = "10.16.18.121", description = "Kochab NTP2" }
+      svc_vela   = { vlan_id = 2817, subnet = "10.16.26.0/30", router_address = "10.16.26.1", description = "Vela VPN" }
+      public     = { vlan_id = 3802, subnet = "203.0.113.112/29", router_address = "203.0.113.113", description = "Routed public" }
+    }
+
+    secondary_dns = {
+      enabled           = true
+      management_ipv4   = "10.16.222.2"
+      internal_dns_ipv4 = "10.16.18.53"
+      internal_dns_ipv6 = "2001:db8:1234::2"
+      internal_ntp_ipv4 = "10.16.18.122"
+      internal_ntp_ipv6 = "2001:db8:1278::2"
+      public_dns_ipv4   = "203.0.113.114"
+    }
+    secondary_transfer_tsig_secret = "dGVzdC10cmFuc2Zlci1rZXk="
+    cutover = {
+      dns_target        = "bind"
+      allow_dns_cutover = true
+      public_dns_vip    = true
+      ntp_serving       = true
+    }
+  }
+
+  assert {
+    condition = (
+      length(opnsense_bind_tsig_key.secondary_transfer) == 1 &&
+      opnsense_bind_primary_domain.internal.transfer_key_id == opnsense_bind_tsig_key.secondary_transfer[0].id &&
+      opnsense_bind_primary_domain.internal.also_notify == toset(["10.16.18.53"]) &&
+      opnsense_bind_primary_domain.public.also_notify == toset(["203.0.113.114"])
+    )
+    error_message = "Primary views must authenticate transfers and NOTIFY the matching Rigi identity."
+  }
+
+  assert {
+    condition = (
+      opnsense_bind_record.internal_ns2_ipv4[0].value == "10.16.18.53" &&
+      opnsense_bind_record.public_ns2_ipv4[0].value == "203.0.113.114" &&
+      opnsense_firewall_filter.platform_ipv4["public_dns2_tcp"].enabled &&
+      opnsense_firewall_filter.platform_ipv4["public_dns2_udp"].enabled &&
+      opnsense_firewall_filter.platform_ipv4["rigi_internal_ntp"].enabled &&
+      opnsense_firewall_filter.platform_ipv4["rigi_public_egress"].enabled
+    )
+    error_message = "Secondary enablement must publish NS2, allow public DNS2, internal NTP2, and routed-public egress."
+  }
 }

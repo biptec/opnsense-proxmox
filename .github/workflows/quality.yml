@@ -105,6 +105,15 @@ jobs:
       - name: Verify primary router production-like values
         run: platform/primary-router/scripts/verify-example.py
 
+      - name: Initialize secondary DNS platform root
+        run: tofu -chdir=platform/secondary-dns init -backend=false -input=false
+
+      - name: Test secondary DNS platform root
+        run: tofu -chdir=platform/secondary-dns test
+
+      - name: Verify secondary DNS rendered configuration
+        run: python platform/secondary-dns/scripts/verify-render.py
+
       - name: Initialize Caddy reverse proxy module
         run: tofu -chdir=modules/caddy-reverse-proxy init -backend=false -input=false
 

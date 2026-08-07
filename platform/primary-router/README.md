@@ -90,3 +90,19 @@ cutover = {
 ```
 
 The final policy permits SSH on `.2:22`, WebGUI/API on `.6:443`, and blocks the inverse port/address combinations. The same policy is applied to the configured IPv6 management identities.
+
+## Secondary DNS integration
+
+Rigi is a separate Terraform state. Keep `secondary_dns.enabled = false` until that state is ready to create the VM. Then supply the same protected transfer TSIG secret to both states and enable secondary integration in this root.
+
+Enabling Rigi adds, in the same primary state:
+
+- one dedicated BIND transfer TSIG key;
+- authenticated `allow-transfer`/`also-notify` on both internal and public `biptec.net` zone copies;
+- internal `ns2` -> `10.16.18.53` (+ IPv6) and public `ns2` -> `5.9.227.114`;
+- internal DNS2 and NTP2 firewall policy;
+- public TCP/UDP 53 forwarding to `5.9.227.114`;
+- routed-public egress for Rigi without NAT;
+- no public UDP/123 rule.
+
+Rigi's public refresh/transfer traffic to the primary DNS VIP is explicitly allowed from VLAN `3802`. The routed-public `/29` remains covered by the platform NO-NAT policy.

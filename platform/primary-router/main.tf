@@ -111,6 +111,28 @@ resource "terraform_data" "platform_contract" {
     }
 
     precondition {
+      condition = !var.secondary_dns.enabled || (
+        try(trimspace(var.secondary_transfer_tsig_secret), "") != "" &&
+        try(can(base64decode(var.secondary_transfer_tsig_secret)), false)
+      )
+      error_message = "secondary_dns.enabled requires a non-empty Base64 secondary_transfer_tsig_secret."
+    }
+
+    precondition {
+      condition = !var.secondary_dns.enabled || alltrue([
+        for address in [
+          var.secondary_dns.management_ipv4,
+          var.secondary_dns.internal_dns_ipv4,
+          var.secondary_dns.internal_ntp_ipv4,
+          var.secondary_dns.public_dns_ipv4,
+          ] : anytrue([
+            for network in values(var.routed_networks) : cidrcontains(network.subnet, address)
+        ])
+      ])
+      error_message = "Rigi secondary identities must remain inside the routed host, DNS2, NTP2, and public transport networks."
+    }
+
+    precondition {
       condition     = trimspace(local.current_webgui_certificate_ref) != ""
       error_message = "A current WebGUI certificate reference must be discoverable or explicitly supplied."
     }

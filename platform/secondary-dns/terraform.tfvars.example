@@ -1,0 +1,52 @@
+# Proxmox placement. Keep vm_datastore aligned with the existing test VM storage.
+node_name         = "tofana"
+vm_datastore      = "REPLACE_WITH_EXISTING_VM_DATASTORE"
+image_datastore   = "local"
+snippet_datastore = "local"
+bridge            = "vmbr1"
+
+management = {
+  vlan_id      = 508
+  ipv4_cidr    = "10.16.222.2/30"
+  ipv4_gateway = "10.16.222.1"
+  ipv6_cidr    = "2a07:e580:a10:de00::2/64"
+  ipv6_gateway = "2a07:e580:a10:de00::1"
+}
+
+dns_internal = {
+  vlan_id      = 2804
+  ipv4_cidr    = "10.16.18.53/30"
+  ipv4_gateway = "10.16.18.54"
+  ipv6_cidr    = "2a07:e580:a10:1234::2/64"
+  ipv6_gateway = "2a07:e580:a10:1234::1"
+}
+
+ntp_internal = {
+  vlan_id      = 2820
+  ipv4_cidr    = "10.16.18.122/30"
+  ipv4_gateway = "10.16.18.121"
+  ipv6_cidr    = "2a07:e580:a10:1278::2/64"
+  ipv6_gateway = "2a07:e580:a10:1278::1"
+}
+
+public = {
+  vlan_id      = 3802
+  ipv4_cidr    = "5.9.227.114/29"
+  ipv4_gateway = "5.9.227.113"
+}
+
+primary = {
+  zone_name            = "biptec.net"
+  internal_dns_ipv4    = "10.16.16.53"
+  internal_notify_ipv4 = "10.16.18.54"
+  public_dns_ipv4      = "138.201.128.88"
+  public_notify_ipv4   = "5.9.227.113"
+}
+
+internal_client_networks = [
+  "10.0.0.0/8",
+  "2a07:e580:a10::/48",
+]
+
+# transfer_tsig_secret is intentionally omitted. Supply it from a gitignored
+# tfvars/backend secret source. It is stored in protected Terraform state.

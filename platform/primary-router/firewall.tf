@@ -16,6 +16,11 @@ locals {
     local.internal_ipv4_interfaces,
     toset([var.management_interface]),
   )
+  secondary_public_network_key = try(one([
+    for name, network in var.routed_networks : name
+    if cidrcontains(network.subnet, var.secondary_dns.public_dns_ipv4)
+  ]), null)
+  secondary_public_interface = local.secondary_public_network_key == null ? "" : opnsense_interfaces_assignment.routed[local.secondary_public_network_key].name
 
   firewall_ipv4_rules = {
     management_ssh = {
@@ -117,6 +122,84 @@ locals {
       port        = "123"
       description = "Internal NTP"
     }
+    rigi_management_ssh = {
+      enabled     = var.secondary_dns.enabled
+      sequence    = 125
+      interfaces  = local.internal_service_ingress_interfaces
+      action      = "pass"
+      protocol    = "TCP"
+      source      = opnsense_firewall_alias.internal_ipv4.name
+      destination = var.secondary_dns.management_ipv4
+      port        = "22"
+      description = "Rigi management SSH"
+    }
+    rigi_internal_dns_tcp = {
+      enabled     = var.secondary_dns.enabled && var.cutover.dns_target == "bind"
+      sequence    = 126
+      interfaces  = local.internal_service_ingress_interfaces
+      action      = "pass"
+      protocol    = "TCP"
+      source      = opnsense_firewall_alias.internal_ipv4.name
+      destination = var.secondary_dns.internal_dns_ipv4
+      port        = "53"
+      description = "Rigi internal DNS TCP"
+    }
+    rigi_internal_dns_udp = {
+      enabled     = var.secondary_dns.enabled && var.cutover.dns_target == "bind"
+      sequence    = 127
+      interfaces  = local.internal_service_ingress_interfaces
+      action      = "pass"
+      protocol    = "UDP"
+      source      = opnsense_firewall_alias.internal_ipv4.name
+      destination = var.secondary_dns.internal_dns_ipv4
+      port        = "53"
+      description = "Rigi internal DNS UDP"
+    }
+    rigi_internal_ntp = {
+      enabled     = var.secondary_dns.enabled && var.cutover.ntp_serving
+      sequence    = 128
+      interfaces  = local.internal_service_ingress_interfaces
+      action      = "pass"
+      protocol    = "UDP"
+      source      = opnsense_firewall_alias.internal_ipv4.name
+      destination = var.secondary_dns.internal_ntp_ipv4
+      port        = "123"
+      description = "Rigi internal NTP"
+    }
+    rigi_to_primary_public_dns_tcp = {
+      enabled     = var.secondary_dns.enabled && var.cutover.dns_target == "bind"
+      sequence    = 129
+      interfaces  = [local.secondary_public_interface]
+      action      = "pass"
+      protocol    = "TCP"
+      source      = var.secondary_dns.public_dns_ipv4
+      destination = var.wan.public_dns_address
+      port        = "53"
+      description = "Rigi public DNS transfer and refresh TCP"
+    }
+    rigi_to_primary_public_dns_udp = {
+      enabled     = var.secondary_dns.enabled && var.cutover.dns_target == "bind"
+      sequence    = 130
+      interfaces  = [local.secondary_public_interface]
+      action      = "pass"
+      protocol    = "UDP"
+      source      = var.secondary_dns.public_dns_ipv4
+      destination = var.wan.public_dns_address
+      port        = "53"
+      description = "Rigi public DNS refresh UDP"
+    }
+    rigi_public_egress = {
+      enabled            = var.secondary_dns.enabled
+      sequence           = 131
+      interfaces         = [local.secondary_public_interface]
+      action             = "pass"
+      protocol           = "any"
+      source             = var.secondary_dns.public_dns_ipv4
+      destination        = opnsense_firewall_alias.private_ipv4.name
+      destination_invert = true
+      port               = ""
+      description        = "Rigi routed-public Internet egress without NAT"
+    }
     internal_internet_egress = {
       enabled            = var.cutover.outbound_nat
       sequence           = 150
@@ -150,6 +233,28 @@ locals {
       destination = var.wan.public_dns_address
       port        = "53"
       description = "Public authoritative DNS UDP"
+    }
+    public_dns2_tcp = {
+      enabled     = var.secondary_dns.enabled && var.cutover.dns_target == "bind"
+      sequence    = 202
+      interfaces  = [opnsense_interfaces_assignment.wan.name]
+      action      = "pass"
+      protocol    = "TCP"
+      source      = "any"
+      destination = var.secondary_dns.public_dns_ipv4
+      port        = "53"
+      description = "Public secondary authoritative DNS TCP"
+    }
+    public_dns2_udp = {
+      enabled     = var.secondary_dns.enabled && var.cutover.dns_target == "bind"
+      sequence    = 203
+      interfaces  = [opnsense_interfaces_assignment.wan.name]
+      action      = "pass"
+      protocol    = "UDP"
+      source      = "any"
+      destination = var.secondary_dns.public_dns_ipv4
+      port        = "53"
+      description = "Public secondary authoritative DNS UDP"
     }
     public_caddy_http = {
       enabled     = var.cutover.caddy_enabled
@@ -252,6 +357,41 @@ locals {
         description = "Internal DNS UDP IPv6"
       }
     },
+    var.secondary_dns.enabled ? {
+      rigi_internal_dns_tcp_ipv6 = {
+        enabled     = var.cutover.dns_target == "bind"
+        sequence    = 135
+        interfaces  = local.internal_service_ingress_interfaces
+        action      = "pass"
+        protocol    = "TCP"
+        source      = "any"
+        destination = var.secondary_dns.internal_dns_ipv6
+        port        = "53"
+        description = "Rigi internal DNS TCP IPv6"
+      }
+      rigi_internal_dns_udp_ipv6 = {
+        enabled     = var.cutover.dns_target == "bind"
+        sequence    = 136
+        interfaces  = local.internal_service_ingress_interfaces
+        action      = "pass"
+        protocol    = "UDP"
+        source      = "any"
+        destination = var.secondary_dns.internal_dns_ipv6
+        port        = "53"
+        description = "Rigi internal DNS UDP IPv6"
+      }
+      rigi_internal_ntp_ipv6 = {
+        enabled     = var.cutover.ntp_serving
+        sequence    = 137
+        interfaces  = local.internal_service_ingress_interfaces
+        action      = "pass"
+        protocol    = "UDP"
+        source      = "any"
+        destination = var.secondary_dns.internal_ntp_ipv6
+        port        = "123"
+        description = "Rigi internal NTP IPv6"
+      }
+    } : {},
     local.internal_caddy_ipv6 == null ? {} : {
       internal_caddy_http_ipv6 = {
         enabled     = var.cutover.caddy_enabled

@@ -190,3 +190,27 @@ variable "cutover" {
     error_message = "cutover.dns_verify_timeout must be between 5 and 300 seconds."
   }
 }
+
+variable "secondary_dns" {
+  description = "Optional Rigi secondary DNS/NTP integration. Values are fixed inventory identities; enabled stays false until Rigi is ready."
+  type = object({
+    enabled                 = optional(bool, false)
+    management_ipv4         = optional(string, "10.16.222.2")
+    internal_dns_ipv4       = optional(string, "10.16.18.53")
+    internal_dns_ipv6       = optional(string, "2a07:e580:a10:1234::2")
+    internal_ntp_ipv4       = optional(string, "10.16.18.122")
+    internal_ntp_ipv6       = optional(string, "2a07:e580:a10:1278::2")
+    public_dns_ipv4         = optional(string, "5.9.227.114")
+    transfer_tsig_name      = optional(string, "secondary-transfer.biptec.net")
+    transfer_tsig_algorithm = optional(string, "hmac-sha256")
+  })
+  default = {}
+}
+
+variable "secondary_transfer_tsig_secret" {
+  description = "Base64 TSIG secret shared with Rigi for authenticated AXFR/IXFR and NOTIFY. Required only when secondary_dns.enabled is true."
+  type        = string
+  default     = null
+  nullable    = true
+  sensitive   = true
+}

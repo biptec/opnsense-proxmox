@@ -84,3 +84,13 @@ output "internal_ntp_address" {
   description = "Portable internal NTP IPv4 endpoint."
   value       = local.internal_ntp_ipv4
 }
+
+output "secondary_dns_enabled" {
+  description = "Whether Rigi transfer/NS/firewall integration is active in the primary state."
+  value       = var.secondary_dns.enabled
+}
+
+output "secondary_public_dns_address" {
+  description = "Rigi public DNS2 address when secondary integration is enabled."
+  value       = var.secondary_dns.enabled ? var.secondary_dns.public_dns_ipv4 : null
+}

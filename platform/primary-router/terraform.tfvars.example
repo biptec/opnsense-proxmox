@@ -210,5 +210,11 @@ vpn_client_route = {
   gateway_address = "10.16.26.2"
 }
 
+# Secondary integration stays disabled until the separate Rigi state is ready.
+secondary_dns = {
+  enabled = false
+}
+# secondary_transfer_tsig_secret is intentionally omitted while disabled.
+
 # Activation stays false until the explicit DNS/firewall/egress cutover stage.
 cutover = {}
