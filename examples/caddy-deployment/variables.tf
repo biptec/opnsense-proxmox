@@ -27,13 +27,17 @@ variable "public_ingress_interface" {
 }
 
 variable "public_destination" {
-  description = "Optional public address or alias. Null uses <public_ingress_interface>ip."
+  description = "Dedicated public IPv4 address used by Caddy and the public ingress rules."
   type        = string
-  default     = null
 
   validation {
-    condition     = var.public_destination == null || trimspace(var.public_destination) != ""
-    error_message = "public_destination must be null or non-empty."
+    condition = (
+      !strcontains(var.public_destination, "/") &&
+      can(cidrnetmask("${var.public_destination}/32")) &&
+      var.public_destination != "0.0.0.0" &&
+      !startswith(var.public_destination, "127.")
+    )
+    error_message = "public_destination must be a non-wildcard IPv4 address without a prefix."
   }
 }
 
