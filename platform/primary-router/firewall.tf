@@ -26,7 +26,7 @@ locals {
     management_ssh = {
       enabled     = true
       sequence    = 10
-      interfaces  = [var.management_interface]
+      interfaces  = local.internal_service_ingress_interfaces
       action      = "pass"
       protocol    = "TCP"
       source      = opnsense_firewall_alias.internal_ipv4.name
@@ -37,7 +37,7 @@ locals {
     management_web = {
       enabled     = true
       sequence    = 11
-      interfaces  = [var.management_interface]
+      interfaces  = local.internal_service_ingress_interfaces
       action      = "pass"
       protocol    = "TCP"
       source      = opnsense_firewall_alias.internal_ipv4.name
@@ -48,7 +48,7 @@ locals {
     block_web_on_ssh_identity = {
       enabled     = var.cutover.management_endpoint_firewall
       sequence    = 12
-      interfaces  = [var.management_interface]
+      interfaces  = local.internal_service_ingress_interfaces
       action      = "block"
       protocol    = "TCP"
       source      = "any"
@@ -59,7 +59,7 @@ locals {
     block_ssh_on_web_identity = {
       enabled     = var.cutover.management_endpoint_firewall
       sequence    = 13
-      interfaces  = [var.management_interface]
+      interfaces  = local.internal_service_ingress_interfaces
       action      = "block"
       protocol    = "TCP"
       source      = "any"
@@ -285,7 +285,7 @@ locals {
       management_ssh_ipv6 = {
         enabled     = true
         sequence    = 20
-        interfaces  = [var.management_interface]
+        interfaces  = local.internal_service_ingress_interfaces
         action      = "pass"
         protocol    = "TCP"
         source      = "any"
@@ -298,7 +298,7 @@ locals {
       management_web_ipv6 = {
         enabled     = true
         sequence    = 21
-        interfaces  = [var.management_interface]
+        interfaces  = local.internal_service_ingress_interfaces
         action      = "pass"
         protocol    = "TCP"
         source      = "any"
@@ -311,7 +311,7 @@ locals {
       block_web_on_ssh_ipv6 = {
         enabled     = var.cutover.management_endpoint_firewall
         sequence    = 22
-        interfaces  = [var.management_interface]
+        interfaces  = local.internal_service_ingress_interfaces
         action      = "block"
         protocol    = "TCP"
         source      = "any"
@@ -324,7 +324,7 @@ locals {
       block_ssh_on_web_ipv6 = {
         enabled     = var.cutover.management_endpoint_firewall
         sequence    = 23
-        interfaces  = [var.management_interface]
+        interfaces  = local.internal_service_ingress_interfaces
         action      = "block"
         protocol    = "TCP"
         source      = "any"

@@ -178,8 +178,12 @@ variable "transfer_tsig_secret" {
   description = "Canonical Base64 TSIG secret, supplied outside Git. It is stored in the protected Terraform state and cloud-init snippet."
 
   validation {
-    condition     = trimspace(var.transfer_tsig_secret) != "" && can(base64decode(var.transfer_tsig_secret))
-    error_message = "transfer_tsig_secret must be non-empty Base64."
+    condition = (
+      trimspace(var.transfer_tsig_secret) != "" &&
+      length(var.transfer_tsig_secret) % 4 == 0 &&
+      can(regex("^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$", var.transfer_tsig_secret))
+    )
+    error_message = "transfer_tsig_secret must be non-empty canonical Base64."
   }
 }
 

@@ -150,6 +150,15 @@ run "safe_platform_composition" {
 
   assert {
     condition = (
+      length(opnsense_bind_acl.internal_clients.name) <= 32 &&
+      length(opnsense_bind_acl.internal_dns_destination.name) <= 32 &&
+      length(opnsense_bind_acl.public_dns_destination.name) <= 32
+    )
+    error_message = "BIND ACL names must stay within the os-bind 32-character backend limit."
+  }
+
+  assert {
+    condition = (
       opnsense_dns_service_cutover.primary.target == "unbound" &&
       !opnsense_dns_service_cutover.primary.allow_cutover &&
       !opnsense_firewall_filter.platform_ipv4["public_dns_tcp"].enabled &&
@@ -160,6 +169,21 @@ run "safe_platform_composition" {
       !opnsense_firewall_filter.platform_ipv4["internal_internet_egress"].enabled
     )
     error_message = "Safe defaults must retain Unbound and keep DNS ingress, management cross-blocking, and Internet egress detached."
+  }
+
+  assert {
+    condition = (
+      contains(opnsense_firewall_filter.platform_ipv4["management_ssh"].interface.interface, "lan") &&
+      contains(opnsense_firewall_filter.platform_ipv4["management_ssh"].interface.interface, "opt10") &&
+      contains(opnsense_firewall_filter.platform_ipv4["management_web"].interface.interface, "opt10") &&
+      contains(opnsense_firewall_filter.platform_ipv4["block_web_on_ssh_identity"].interface.interface, "opt10") &&
+      contains(opnsense_firewall_filter.platform_ipv4["block_ssh_on_web_identity"].interface.interface, "opt10") &&
+      contains(opnsense_firewall_filter.platform_ipv6["management_ssh_ipv6"].interface.interface, "opt10") &&
+      contains(opnsense_firewall_filter.platform_ipv6["management_web_ipv6"].interface.interface, "opt10") &&
+      contains(opnsense_firewall_filter.platform_ipv6["block_web_on_ssh_ipv6"].interface.interface, "opt10") &&
+      contains(opnsense_firewall_filter.platform_ipv6["block_ssh_on_web_ipv6"].interface.interface, "opt10")
+    )
+    error_message = "Management endpoint allow/block policy must apply on routed internal ingress as well as the direct management NIC."
   }
 }
 
@@ -252,6 +276,40 @@ run "reject_public_dns_vip_while_unbound_owns_port" {
   expect_failures = [terraform_data.platform_contract]
 }
 
+run "secondary_dns_detach_retains_tsig" {
+  command = plan
+
+  variables {
+    secondary_dns = {
+      enabled = false
+    }
+    secondary_transfer_tsig_secret = "/////w=="
+  }
+
+  assert {
+    condition = (
+      length(opnsense_bind_tsig_key.secondary_transfer) == 1 &&
+      opnsense_bind_primary_domain.internal.transfer_key_id == "" &&
+      opnsense_bind_primary_domain.public.transfer_key_id == "" &&
+      length(opnsense_bind_record.internal_ns2) == 0 &&
+      length(opnsense_bind_record.public_ns2) == 0 &&
+      length(opnsense_bind_primary_domain.internal.also_notify) == 0 &&
+      length(opnsense_bind_primary_domain.public.also_notify) == 0
+    )
+    error_message = "Secondary detach must remove zone references before the supplied TSIG key is eligible for cleanup."
+  }
+}
+
+run "reject_invalid_retained_tsig_secret" {
+  command = plan
+
+  variables {
+    secondary_transfer_tsig_secret = "not-base64"
+  }
+
+  expect_failures = [terraform_data.platform_contract]
+}
+
 run "secondary_dns_integration" {
   command = plan
 
@@ -273,7 +331,7 @@ run "secondary_dns_integration" {
       internal_ntp_ipv6 = "2001:db8:1278::2"
       public_dns_ipv4   = "203.0.113.114"
     }
-    secondary_transfer_tsig_secret = "dGVzdC10cmFuc2Zlci1rZXk="
+    secondary_transfer_tsig_secret = "/////w=="
     cutover = {
       dns_target        = "bind"
       allow_dns_cutover = true

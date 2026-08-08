@@ -36,6 +36,7 @@ assert network["ethernets"]["mgmt0"]["addresses"] == [
     "2a07:e580:a10:de00::2/64",
 ]
 assert network["ethernets"]["trunk0"].get("addresses") is None
+assert network["ethernets"]["trunk0"]["optional"] is True
 assert network["vlans"]["alcor"]["id"] == 2804
 assert network["vlans"]["kochab"]["id"] == 2820
 assert network["vlans"]["public"]["id"] == 3802
@@ -86,8 +87,20 @@ user_data = payload["user_data"]
 assert user_data.startswith("#cloud-config\n")
 cloud = yaml.safe_load(user_data.split("\n", 1)[1])
 assert cloud["ssh_pwauth"] is False and cloud["disable_root"] is True
+assert "ssh_authorized_keys" not in cloud["users"][0]
 assert {"bind9", "chrony", "nftables", "qemu-guest-agent"}.issubset(set(cloud["packages"]))
-assert any(f["path"] == "/etc/bind/named.conf.local" and f["permissions"] == "0600" for f in cloud["write_files"])
+assert any(f["path"] == "/etc/bind/named.conf.local" and f["permissions"] == "0640" and f["owner"] == "root:bind" for f in cloud["write_files"])
+named_main = next(f for f in cloud["write_files"] if f["path"] == "/etc/bind/named.conf")
+assert "named.conf.options" in named_main["content"] and "named.conf.local" in named_main["content"]
+assert "named.conf.default-zones" not in named_main["content"]
+assert cloud["runcmd"][0][:2] == ["sh", "-ec"]
+readiness = cloud["runcmd"][0][2]
+assert "systemctl enable --now named.service" in readiness
+assert "systemctl enable --now bind9.service" not in readiness
+assert "systemctl start qemu-guest-agent.service" in readiness
+assert "systemctl is-active --quiet named" in readiness
+assert "systemd-timesyncd" not in readiness
+assert readiness.rfind("touch /var/lib/rigi-bootstrap.done") > readiness.rfind("systemctl is-active --quiet qemu-guest-agent")
 assert payload["trunks"] == "2804;2820;3802"
 
 print("secondary-dns-render=ok")

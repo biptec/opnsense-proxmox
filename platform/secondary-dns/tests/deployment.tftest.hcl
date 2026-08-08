@@ -54,7 +54,7 @@ variables {
     public_notify_ipv4   = "5.9.227.113"
   }
 
-  transfer_tsig_secret = "dGVzdC10cmFuc2Zlci1rZXk="
+  transfer_tsig_secret = "/////w=="
 }
 
 run "rigi_immutable_composition" {

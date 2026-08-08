@@ -208,7 +208,7 @@ variable "secondary_dns" {
 }
 
 variable "secondary_transfer_tsig_secret" {
-  description = "Base64 TSIG secret shared with Rigi for authenticated AXFR/IXFR and NOTIFY. Required only when secondary_dns.enabled is true."
+  description = "Base64 TSIG secret shared with Rigi for authenticated AXFR/IXFR and NOTIFY. Keep it supplied through the secondary detach apply; omit it only after the primary zones no longer reference the key."
   type        = string
   default     = null
   nullable    = true

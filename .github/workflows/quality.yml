@@ -36,8 +36,8 @@ jobs:
 
       - name: Install pinned OPNsense provider release
         env:
-          PROVIDER_VERSION: '0.29.0'
-          PROVIDER_SHA256: '5c9fffaf7058dc4c6087bd3db4e7b80b40f1cfd1950d0e52b4192df759214e92'
+          PROVIDER_VERSION: '0.29.1'
+          PROVIDER_SHA256: '53fda429d676c416bd812f4197c9ac20d3613574e2a8c6ed896fbb58df9a0e85'
           PROVIDER_MIRROR_DIR: ${{ runner.temp }}/provider-mirror
         run: |
           scripts/install-provider-release.sh
@@ -58,7 +58,7 @@ jobs:
         run: tofu fmt -check -recursive
 
       - name: Check shell syntax
-        run: sh -n image/build.sh image/tests/test_build.sh guest/caddy-policy/tests/test_policy.sh scripts/install-provider-release.sh
+        run: sh -n image/build.sh image/tests/test_build.sh guest/caddy-policy/tests/test_policy.sh scripts/install-provider-release.sh platform/primary-router/scripts/import-singletons.sh
 
       - name: Test image build wrapper
         run: image/tests/test_build.sh

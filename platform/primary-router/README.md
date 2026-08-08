@@ -29,6 +29,14 @@ OPNSENSE_ALLOW_INSECURE
 
 When `webgui_certificate_ref = null`, the read-only helper discovers the certificate already used by WebGUI. Credentials are read only from the environment and are never printed.
 
+A clean OPNsense installation already has singleton WebGUI, SSH, BIND, and Caddy settings. After `tofu init`, adopt those objects into this state before the first platform apply:
+
+```sh
+STATE_PATH=terraform.tfstate VAR_FILE=terraform.tfvars ./scripts/import-singletons.sh
+```
+
+The helper is idempotent and uses only `tofu state show` and `tofu import`; it does not write OPNsense configuration outside Terraform.
+
 ## Ownership
 
 This state owns:
@@ -47,6 +55,8 @@ The VM bootstrap state owns Etna's primary management IPv4 `10.16.214.2/30`. Sit
 ## Safe first apply
 
 All cutover flags default to false. The initial platform apply therefore does not attach the public DNS/Caddy/SNAT VIPs and does not enable Caddy or client-facing NTP service. DNS service ownership and ingress firewall cutover are added in the next platform stage.
+
+The first ownership apply intentionally changes the imported WebGUI/SSH listener configuration, so run it once with `allow_management_readdress = true`. Use `-parallelism=1`: OPNsense serializes configd writes and a parallel first apply can create a long lock queue. After that apply succeeds, immediately apply the same safe configuration again with the default `allow_management_readdress = false` to relock the guard. Subsequent plans should keep the guard false unless a reviewed management readdress is intentional.
 
 `terraform.tfvars.example` contains the approved Etna/Rigi production-like addressing. Copy it to a gitignored `.tfvars` file for the test deployment; secrets stay in environment variables.
 
@@ -74,7 +84,7 @@ The dependency graph attaches the VIP, runs the guarded DNS cutover, verifies BI
 
 Internal DNS recursion is allowed only for `dns_internal_client_networks` and only on the internal DNS destination. The public view matches the public DNS destination, permits authoritative queries, and has recursion disabled.
 
-NTP has no WAN rule. Internal UDP/123 opens only when `ntp_serving = true`. Public Caddy TCP/80 and TCP/443 opens only when Caddy and its public VIP are explicitly activated. General IPv4 egress opens with outbound NAT and excludes RFC1918 destinations, so enabling Internet access does not implicitly enable lateral private-network routing.
+NTP has no WAN rule. Internal UDP/123 opens only when `ntp_serving = true`. Public Caddy TCP/80 and TCP/443 opens only when Caddy and its public VIP are explicitly activated. The outbound NAT mode is always owned by this state: `automatic` while egress is safe/detached and `hybrid` while explicit NO-NAT/SNAT rules are active. General IPv4 egress excludes RFC1918 destinations, so enabling Internet access does not implicitly enable lateral private-network routing.
 
 ## Management endpoint cutover
 
@@ -89,7 +99,7 @@ cutover = {
 }
 ```
 
-The final policy permits SSH on `.2:22`, WebGUI/API on `.6:443`, and blocks the inverse port/address combinations. The same policy is applied to the configured IPv6 management identities.
+The final policy permits SSH on `.2:22`, WebGUI/API on `.6:443`, and blocks the inverse port/address combinations. These destination rules apply on the direct management NIC and every routed internal ingress interface, so VPN/VLAN clients get the same endpoint split while the direct Proxmox rescue path remains available. The same policy is applied to the configured IPv6 management identities.
 
 ## Secondary DNS integration
 
@@ -106,3 +116,12 @@ Enabling Rigi adds, in the same primary state:
 - no public UDP/123 rule.
 
 Rigi's public refresh/transfer traffic to the primary DNS VIP is explicitly allowed from VLAN `3802`. The routed-public `/29` remains covered by the platform NO-NAT policy.
+
+### Secondary detach / rollback
+
+Disable secondary integration in two Terraform applies so BIND never sees a zone referencing a removed TSIG key:
+
+1. Keep `secondary_transfer_tsig_secret` supplied, set `secondary_dns.enabled = false`, and perform the guarded DNS rollback if BIND is also being disabled. This removes NS2/NOTIFY and explicitly clears each zone transfer-key reference while retaining the key object.
+2. After that apply succeeds, omit `secondary_transfer_tsig_secret` and apply the normal safe configuration. The now-unreferenced TSIG key is removed and the DNS cutover guard returns to `false`.
+
+The safe state also returns outbound NAT mode to `automatic`; it does not merely remove NAT resources from Terraform state.

@@ -39,6 +39,7 @@ locals {
         set-name = "trunk0"
         dhcp4    = false
         dhcp6    = false
+        optional = true
       }
     }
     vlans = {
@@ -110,6 +111,11 @@ locals {
         hostname "not disclosed";
         rate-limit { responses-per-second 20; };
     };
+  EOT
+
+  bind_main = <<-EOT
+    include "/etc/bind/named.conf.options";
+    include "/etc/bind/named.conf.local";
   EOT
 
   bind_local = <<-EOT
@@ -235,14 +241,18 @@ locals {
   ssh_pwauth       = false
   disable_root     = true
   users = [
-    {
-      name                = "ubuntu"
-      groups              = ["adm", "sudo"]
-      shell               = "/bin/bash"
-      sudo                = "ALL=(ALL) NOPASSWD:ALL"
-      lock_passwd         = true
-      ssh_authorized_keys = var.ssh_public_key == null ? [] : [trimspace(var.ssh_public_key)]
-    }
+    merge(
+      {
+        name        = "ubuntu"
+        groups      = ["adm", "sudo"]
+        shell       = "/bin/bash"
+        sudo        = "ALL=(ALL) NOPASSWD:ALL"
+        lock_passwd = true
+      },
+      var.ssh_public_key == null ? {} : {
+        ssh_authorized_keys = [trimspace(var.ssh_public_key)]
+      },
+    )
   ]
   bootcmd = [
     ["sh", "-c", "printf '#!/bin/sh\\nexit 101\\n' > /usr/sbin/policy-rc.d && chmod 0755 /usr/sbin/policy-rc.d"],
@@ -256,25 +266,31 @@ locals {
     "openssh-server",
   ]
   write_files = [
+    { path = "/etc/bind/named.conf", permissions = "0644", owner = "root:root", content = local.bind_main, defer = true },
     { path = "/etc/bind/named.conf.options", permissions = "0644", owner = "root:root", content = local.bind_options, defer = true },
-    { path = "/etc/bind/named.conf.local", permissions = "0600", owner = "root:root", content = local.bind_local, defer = true },
+    { path = "/etc/bind/named.conf.local", permissions = "0640", owner = "root:bind", content = local.bind_local, defer = true },
     { path = "/etc/chrony/chrony.conf", permissions = "0644", owner = "root:root", content = local.chrony_config, defer = true },
     { path = "/etc/nftables.conf", permissions = "0600", owner = "root:root", content = local.nftables_config, defer = true },
     { path = "/etc/ssh/sshd_config.d/90-platform-hardening.conf", permissions = "0644", owner = "root:root", content = local.ssh_config, defer = true },
   ]
   runcmd = [
-    ["mkdir", "-p", "/var/cache/bind/internal", "/var/cache/bind/public"],
-    ["chown", "-R", "bind:bind", "/var/cache/bind/internal", "/var/cache/bind/public"],
-    ["named-checkconf"],
-    ["nft", "-c", "-f", "/etc/nftables.conf"],
-    ["rm", "-f", "/usr/sbin/policy-rc.d"],
-    ["systemctl", "disable", "--now", "systemd-timesyncd.service"],
-    ["systemctl", "enable", "--now", "nftables.service"],
-    ["systemctl", "enable", "--now", "bind9.service"],
-    ["systemctl", "enable", "--now", "chrony.service"],
-    ["systemctl", "enable", "--now", "qemu-guest-agent.service"],
-    ["systemctl", "reload", "ssh.service"],
-    ["sh", "-c", "touch /var/lib/rigi-bootstrap.done"],
+    ["sh", "-ec", join("\n", [
+      "mkdir -p /var/cache/bind/internal /var/cache/bind/public",
+      "chown -R bind:bind /var/cache/bind/internal /var/cache/bind/public",
+      "named-checkconf",
+      "nft -c -f /etc/nftables.conf",
+      "rm -f /usr/sbin/policy-rc.d",
+      "systemctl enable --now nftables.service",
+      "systemctl enable --now named.service",
+      "systemctl enable --now chrony.service",
+      "systemctl start qemu-guest-agent.service",
+      "systemctl reload ssh.service",
+      "systemctl is-active --quiet named",
+      "systemctl is-active --quiet chrony",
+      "systemctl is-active --quiet nftables",
+      "systemctl is-active --quiet qemu-guest-agent",
+      "touch /var/lib/rigi-bootstrap.done",
+    ])],
   ]
 })}
   EOT

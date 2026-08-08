@@ -111,11 +111,16 @@ resource "terraform_data" "platform_contract" {
     }
 
     precondition {
-      condition = !var.secondary_dns.enabled || (
-        try(trimspace(var.secondary_transfer_tsig_secret), "") != "" &&
-        try(can(base64decode(var.secondary_transfer_tsig_secret)), false)
-      )
+      condition     = !var.secondary_dns.enabled || local.secondary_transfer_secret_present
       error_message = "secondary_dns.enabled requires a non-empty Base64 secondary_transfer_tsig_secret."
+    }
+
+    precondition {
+      condition = !local.secondary_transfer_secret_present || (
+        try(length(var.secondary_transfer_tsig_secret) % 4 == 0, false) &&
+        try(can(regex("^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$", var.secondary_transfer_tsig_secret)), false)
+      )
+      error_message = "secondary_transfer_tsig_secret must be canonical Base64 when supplied."
     }
 
     precondition {
