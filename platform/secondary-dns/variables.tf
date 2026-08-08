@@ -143,21 +143,26 @@ variable "public" {
   })
 }
 
-variable "internal_client_networks" {
-  type        = set(string)
-  default     = ["10.0.0.0/8", "2a07:e580:a10::/48"]
-  description = "Trusted internal networks allowed recursive DNS and NTP access."
+variable "primary_router" {
+  description = "Etna integration points exported by the primary-router state. The secondary state references shared transport but owns only its own additive router resources."
+  type = object({
+    trunk_parent_device       = string
+    wan_interface             = string
+    public_interface          = string
+    internal_zone_id          = string
+    public_zone_id            = string
+    zone_name                 = string
+    trusted_internal_networks = set(string)
+    internal_dns_ipv4         = string
+    public_dns_ipv4           = string
+    dns_active_service        = string
+  })
 }
 
-variable "primary" {
-  description = "Primary Etna DNS identities and expected NOTIFY sources."
-  type = object({
-    zone_name            = optional(string, "biptec.net")
-    internal_dns_ipv4    = string
-    internal_notify_ipv4 = string
-    public_dns_ipv4      = string
-    public_notify_ipv4   = string
-  })
+variable "allow_router_readdress" {
+  type        = bool
+  default     = false
+  description = "Explicit approval for readdressing an existing Rigi-owned OPNsense assignment."
 }
 
 variable "transfer_tsig_name" {

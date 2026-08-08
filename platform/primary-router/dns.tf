@@ -1,18 +1,16 @@
 locals {
-  dns_primary_ns_fqdn               = "${var.dns_zone.primary_ns_label}.${var.dns_zone.name}"
-  dns_secondary_ns_fqdn             = "ns2.${var.dns_zone.name}"
-  internal_dns_ipv4                 = module.router_foundation.service_addresses["dns"]
-  internal_dns_ipv6                 = try(module.router_foundation.service_ipv6_addresses["dns"], null)
-  internal_caddy_ipv4               = module.router_foundation.service_addresses["caddy"]
-  internal_caddy_ipv6               = try(module.router_foundation.service_ipv6_addresses["caddy"], null)
-  internal_ntp_ipv4                 = module.router_foundation.service_addresses["ntp"]
-  internal_ntp_ipv6                 = try(module.router_foundation.service_ipv6_addresses["ntp"], null)
-  secondary_transfer_secret_present = try(trimspace(var.secondary_transfer_tsig_secret), "") != ""
+  dns_primary_ns_fqdn = "${var.dns_zone.primary_ns_label}.${var.dns_zone.name}"
+  internal_dns_ipv4   = module.router_foundation.service_addresses["dns"]
+  internal_dns_ipv6   = try(module.router_foundation.service_ipv6_addresses["dns"], null)
+  internal_caddy_ipv4 = module.router_foundation.service_addresses["caddy"]
+  internal_caddy_ipv6 = try(module.router_foundation.service_ipv6_addresses["caddy"], null)
+  internal_ntp_ipv4   = module.router_foundation.service_addresses["ntp"]
+  internal_ntp_ipv6   = try(module.router_foundation.service_ipv6_addresses["ntp"], null)
 }
 
 resource "opnsense_bind_acl" "internal_clients" {
   name     = "platform_internal_clients"
-  networks = var.dns_internal_client_networks
+  networks = var.trusted_internal_networks
 
   depends_on = [module.router_services]
 }
@@ -55,15 +53,6 @@ resource "opnsense_bind_view" "public" {
   dnssec_validation         = "auto"
 }
 
-resource "opnsense_bind_tsig_key" "secondary_transfer" {
-  count = local.secondary_transfer_secret_present ? 1 : 0
-
-  name      = var.secondary_dns.transfer_tsig_name
-  algorithm = var.secondary_dns.transfer_tsig_algorithm
-  secret    = var.secondary_transfer_tsig_secret
-  enabled   = true
-}
-
 resource "opnsense_bind_primary_domain" "internal" {
   view_id         = opnsense_bind_view.internal.id
   domain_name     = var.dns_zone.name
@@ -75,8 +64,12 @@ resource "opnsense_bind_primary_domain" "internal" {
   retry           = var.dns_zone.retry
   expire          = var.dns_zone.expire
   negative_ttl    = var.dns_zone.negative_ttl
-  transfer_key_id = var.secondary_dns.enabled ? try(opnsense_bind_tsig_key.secondary_transfer[0].id, "") : ""
-  also_notify     = var.secondary_dns.enabled ? [var.secondary_dns.internal_dns_ipv4] : []
+  transfer_key_id = ""
+  also_notify     = []
+
+  lifecycle {
+    ignore_changes = [transfer_key_id, also_notify]
+  }
 }
 
 resource "opnsense_bind_primary_domain" "public" {
@@ -90,8 +83,12 @@ resource "opnsense_bind_primary_domain" "public" {
   retry           = var.dns_zone.retry
   expire          = var.dns_zone.expire
   negative_ttl    = var.dns_zone.negative_ttl
-  transfer_key_id = var.secondary_dns.enabled ? try(opnsense_bind_tsig_key.secondary_transfer[0].id, "") : ""
-  also_notify     = var.secondary_dns.enabled ? [var.secondary_dns.public_dns_ipv4] : []
+  transfer_key_id = ""
+  also_notify     = []
+
+  lifecycle {
+    ignore_changes = [transfer_key_id, also_notify]
+  }
 }
 
 resource "opnsense_bind_record" "internal_ns" {
@@ -163,51 +160,6 @@ resource "opnsense_bind_record" "public_ns_ipv4" {
   value     = var.wan.public_dns_address
 }
 
-resource "opnsense_bind_record" "internal_ns2" {
-  count = var.secondary_dns.enabled ? 1 : 0
-
-  domain_id = opnsense_bind_primary_domain.internal.id
-  name      = "@"
-  type      = "NS"
-  value     = "${local.dns_secondary_ns_fqdn}."
-}
-
-resource "opnsense_bind_record" "internal_ns2_ipv4" {
-  count = var.secondary_dns.enabled ? 1 : 0
-
-  domain_id = opnsense_bind_primary_domain.internal.id
-  name      = "ns2"
-  type      = "A"
-  value     = var.secondary_dns.internal_dns_ipv4
-}
-
-resource "opnsense_bind_record" "internal_ns2_ipv6" {
-  count = var.secondary_dns.enabled ? 1 : 0
-
-  domain_id = opnsense_bind_primary_domain.internal.id
-  name      = "ns2"
-  type      = "AAAA"
-  value     = var.secondary_dns.internal_dns_ipv6
-}
-
-resource "opnsense_bind_record" "public_ns2" {
-  count = var.secondary_dns.enabled ? 1 : 0
-
-  domain_id = opnsense_bind_primary_domain.public.id
-  name      = "@"
-  type      = "NS"
-  value     = "${local.dns_secondary_ns_fqdn}."
-}
-
-resource "opnsense_bind_record" "public_ns2_ipv4" {
-  count = var.secondary_dns.enabled ? 1 : 0
-
-  domain_id = opnsense_bind_primary_domain.public.id
-  name      = "ns2"
-  type      = "A"
-  value     = var.secondary_dns.public_dns_ipv4
-}
-
 resource "opnsense_bind_record" "public_proxy_ipv4" {
   domain_id = opnsense_bind_primary_domain.public.id
   name      = "proxy"
@@ -233,11 +185,5 @@ resource "opnsense_dns_service_cutover" "primary" {
     opnsense_bind_record.public_ns,
     opnsense_bind_record.public_ns_ipv4,
     opnsense_bind_record.public_proxy_ipv4,
-    opnsense_bind_tsig_key.secondary_transfer,
-    opnsense_bind_record.internal_ns2,
-    opnsense_bind_record.internal_ns2_ipv4,
-    opnsense_bind_record.internal_ns2_ipv6,
-    opnsense_bind_record.public_ns2,
-    opnsense_bind_record.public_ns2_ipv4,
   ]
 }

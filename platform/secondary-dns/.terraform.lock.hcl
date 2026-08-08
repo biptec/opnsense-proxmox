@@ -1,6 +1,26 @@
 # This file is maintained automatically by "tofu init".
 # Manual edits may be lost in future updates.
 
+provider "registry.opentofu.org/biptec/opnsense" {
+  version     = "0.29.2"
+  constraints = "~> 0.29.2"
+  hashes = [
+    "h1:23cu+Y3bMDmWYLNGUeZbDsbE6+wluC9b+VAa4UsalDI=",
+    "h1:54exj7i2XJqQ8x9e6t2uHKcS6SWWewlHuJ/s/0KSJ5s=",
+    "h1:6KoiXkpKFhTS46MfRaLQa0xdTghJ4K6msuApmWQiiqM=",
+    "h1:A3rE5Y2Z0NUR0uEbp5VQ4cs8p9RGXigo5fpE1POQ7ro=",
+    "h1:AHHaXZ9OqnIRIiWui9+6Eu95+6DpN4xpcqSuWaT4o4U=",
+    "h1:J0GuzTZZzWqTJLx6Bx11wUQr52LciV9CaYsLitGULTI=",
+    "h1:U+xHn6pUcJI6smpGrQdURvqlHusFV+OcUFResPg3Pxw=",
+    "h1:ZyaXAxneag9zXJoxoiwg4GCkk6NeyjKpKJyTSpb1sLw=",
+    "h1:fspbsVak314mH8esovZkT70rPyUXZUG8Ag3eMirNR78=",
+    "h1:gtawkuMfQYonevHv8ykvR6zQQy+Aih4Lg/mGwT8/ufA=",
+    "h1:mI0T9EbNzmg9MVDM2IHsMG+mNsYYHFqqWIf5b8zoJ6k=",
+    "h1:n74hcNTLj4KL6I3Ex9GlBsuAeZtw3g1PZBEl/xFquQ4=",
+    "h1:n88kxndZEIUY/Z6UqdqDyxpHq+sS+5cLdVVyYq2NOek=",
+  ]
+}
+
 provider "registry.opentofu.org/bpg/proxmox" {
   version     = "0.111.1"
   constraints = "0.111.1"

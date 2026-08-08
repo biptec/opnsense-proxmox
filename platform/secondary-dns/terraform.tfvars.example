@@ -35,18 +35,21 @@ public = {
   ipv4_gateway = "5.9.227.113"
 }
 
-primary = {
-  zone_name            = "biptec.net"
-  internal_dns_ipv4    = "10.16.16.53"
-  internal_notify_ipv4 = "10.16.18.54"
-  public_dns_ipv4      = "138.201.128.88"
-  public_notify_ipv4   = "5.9.227.113"
-}
 
-internal_client_networks = [
-  "10.0.0.0/8",
-  "2a07:e580:a10::/48",
-]
+# Populate these from platform/primary-router outputs. They are references only;
+# this state does not own shared WAN or VLAN 3802.
+primary_router = {
+  trunk_parent_device = "vtnet1"
+  wan_interface       = "REPLACE_WITH_PRIMARY_WAN_INTERFACE"
+  public_interface    = "REPLACE_WITH_PRIMARY_ROUTED_3802_INTERFACE"
+  internal_zone_id    = "REPLACE_WITH_PRIMARY_INTERNAL_ZONE_ID"
+  public_zone_id      = "REPLACE_WITH_PRIMARY_PUBLIC_ZONE_ID"
+  zone_name                 = "biptec.net"
+  trusted_internal_networks = ["10.0.0.0/8", "2a07:e580:a10::/48"]
+  internal_dns_ipv4         = "10.16.16.53"
+  public_dns_ipv4           = "138.201.128.88"
+  dns_active_service        = "bind"
+}
 
 # transfer_tsig_secret is intentionally omitted. Supply it from a gitignored
 # tfvars/backend secret source. It is stored in protected Terraform state.

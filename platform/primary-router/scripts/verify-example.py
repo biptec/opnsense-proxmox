@@ -13,7 +13,6 @@ expression = '''jsonencode({
   services        = var.service_networks
   egress          = var.internal_egress_networks
   routed_public   = var.routed_public_subnets
-  vpn             = var.vpn_client_route
 })
 '''
 env = os.environ.copy()
@@ -48,15 +47,8 @@ assert payload["wan"] == {
 }
 
 routed = payload["routed"]
-assert len(routed) == 24
-assert sorted(v["vlan_id"] for v in routed.values()) == [
-    501, 502, 503, 504, 505, 507, 508,
-    2801, 2802, 2804, 2805,
-    2808, 2809, 2810, 2811, 2812, 2813, 2814, 2815, 2816,
-    2817, 2818, 2820, 3802,
-]
-assert routed["svc_alcor"]["router_address"] == "10.16.18.54"
-assert routed["host_rigi"]["router_address"] == "10.16.222.1"
+assert len(routed) == 1
+assert routed["transport_public_routed"]["vlan_id"] == 3802
 assert routed["transport_public_routed"]["router_address"] == "5.9.227.113"
 
 services = payload["services"]
@@ -69,8 +61,5 @@ assert services["nat"]["vlan_id"] == 2822 and services["nat"]["subnet"] == "10.1
 
 assert payload["egress"] == ["10.0.0.0/8"]
 assert payload["routed_public"] == ["5.9.227.112/29"]
-assert payload["vpn"]["network"] == "10.198.0.0/24"
-assert payload["vpn"]["via_network_key"] == "svc_vela"
-assert payload["vpn"]["gateway_address"] == "10.16.26.2"
 
 print("primary-router-example=ok")

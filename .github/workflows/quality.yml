@@ -39,8 +39,8 @@ jobs:
 
       - name: Install pinned OPNsense provider release
         env:
-          PROVIDER_VERSION: '0.29.1'
-          PROVIDER_SHA256: '53fda429d676c416bd812f4197c9ac20d3613574e2a8c6ed896fbb58df9a0e85'
+          PROVIDER_VERSION: '0.29.2'
+          PROVIDER_SHA256: '837531c5abc785626d94bad48c0e61e3496e82d7d0643d4331956e77aa4ce9da'
           PROVIDER_MIRROR_DIR: ${{ runner.temp }}/provider-mirror
         run: |
           scripts/install-provider-release.sh

@@ -7,8 +7,8 @@ locals {
   ntp_ipv6        = split("/", var.ntp_internal.ipv6_cidr)[0]
   public_ipv4     = split("/", var.public.ipv4_cidr)[0]
 
-  internal_ipv4_networks = sort([for network in var.internal_client_networks : network if !strcontains(network, ":")])
-  internal_ipv6_networks = sort([for network in var.internal_client_networks : network if strcontains(network, ":")])
+  internal_ipv4_networks = sort([for network in var.primary_router.trusted_internal_networks : network if !strcontains(network, ":")])
+  internal_ipv6_networks = sort([for network in var.primary_router.trusted_internal_networks : network if strcontains(network, ":")])
 
   network_data = yamlencode({
     version = 2
@@ -48,16 +48,18 @@ locals {
         link      = "trunk0"
         addresses = [var.dns_internal.ipv4_cidr, var.dns_internal.ipv6_cidr]
         nameservers = {
-          addresses = [var.primary.internal_dns_ipv4]
+          addresses = [var.primary_router.internal_dns_ipv4]
         }
-        routes = [
-          { to = cidrsubnet(var.dns_internal.ipv4_cidr, 0, 0), scope = "link", table = var.dns_internal.vlan_id },
-          { to = "0.0.0.0/0", via = var.dns_internal.ipv4_gateway, table = var.dns_internal.vlan_id },
-          { to = "10.0.0.0/8", via = var.dns_internal.ipv4_gateway, metric = 50 },
-          { to = cidrsubnet(var.dns_internal.ipv6_cidr, 0, 0), scope = "link", table = var.dns_internal.vlan_id },
-          { to = "::/0", via = var.dns_internal.ipv6_gateway, table = var.dns_internal.vlan_id },
-          { to = "2a07:e580:a10::/48", via = var.dns_internal.ipv6_gateway, metric = 50 },
-        ]
+        routes = concat(
+          [
+            { to = cidrsubnet(var.dns_internal.ipv4_cidr, 0, 0), scope = "link", table = var.dns_internal.vlan_id },
+            { to = "0.0.0.0/0", via = var.dns_internal.ipv4_gateway, table = var.dns_internal.vlan_id },
+            { to = cidrsubnet(var.dns_internal.ipv6_cidr, 0, 0), scope = "link", table = var.dns_internal.vlan_id },
+            { to = "::/0", via = var.dns_internal.ipv6_gateway, table = var.dns_internal.vlan_id },
+          ],
+          [for network in local.internal_ipv4_networks : { to = network, via = var.dns_internal.ipv4_gateway, metric = 50 }],
+          [for network in local.internal_ipv6_networks : { to = network, via = var.dns_internal.ipv6_gateway, metric = 50 }],
+        )
         "routing-policy" = [
           { from = "${local.dns_ipv4}/32", table = var.dns_internal.vlan_id, priority = 102804 },
           { from = "${local.dns_ipv6}/128", table = var.dns_internal.vlan_id, priority = 102805 },
@@ -135,11 +137,11 @@ locals {
         transfer-source ${local.dns_ipv4};
         transfer-source-v6 ${local.dns_ipv6};
 
-        zone "${trimsuffix(var.primary.zone_name, ".")}" {
+        zone "${trimsuffix(var.primary_router.zone_name, ".")}" {
             type secondary;
-            primaries { ${var.primary.internal_dns_ipv4} key "${var.transfer_tsig_name}"; };
-            allow-notify { ${var.primary.internal_notify_ipv4}; };
-            file "/var/cache/bind/internal/${trimsuffix(var.primary.zone_name, ".")}.db";
+            primaries { ${var.primary_router.internal_dns_ipv4} key "${var.transfer_tsig_name}"; };
+            allow-notify { ${var.dns_internal.ipv4_gateway}; };
+            file "/var/cache/bind/internal/${trimsuffix(var.primary_router.zone_name, ".")}.db";
         };
     };
 
@@ -150,11 +152,11 @@ locals {
         allow-query { any; };
         transfer-source ${local.public_ipv4};
 
-        zone "${trimsuffix(var.primary.zone_name, ".")}" {
+        zone "${trimsuffix(var.primary_router.zone_name, ".")}" {
             type secondary;
-            primaries { ${var.primary.public_dns_ipv4} key "${var.transfer_tsig_name}"; };
-            allow-notify { ${var.primary.public_notify_ipv4}; };
-            file "/var/cache/bind/public/${trimsuffix(var.primary.zone_name, ".")}.db";
+            primaries { ${var.primary_router.public_dns_ipv4} key "${var.transfer_tsig_name}"; };
+            allow-notify { ${var.public.ipv4_gateway}; };
+            file "/var/cache/bind/public/${trimsuffix(var.primary_router.zone_name, ".")}.db";
         };
     };
   EOT

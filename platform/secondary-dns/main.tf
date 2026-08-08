@@ -43,10 +43,16 @@ resource "terraform_data" "contract" {
 
     precondition {
       condition = (
-        contains(local.internal_ipv4_networks, "10.0.0.0/8") &&
-        length(local.internal_ipv6_networks) > 0
+        length(local.internal_ipv4_networks) > 0 &&
+        length(local.internal_ipv6_networks) > 0 &&
+        alltrue([for network in var.primary_router.trusted_internal_networks : can(cidrhost(network, 0))])
       )
-      error_message = "Rigi must retain the trusted internal IPv4 and IPv6 client scopes."
+      error_message = "Rigi requires valid trusted internal CIDRs with at least one IPv4 and one IPv6 scope from the primary-router state."
+    }
+
+    precondition {
+      condition     = var.primary_router.dns_active_service == "bind"
+      error_message = "Rigi integration requires the primary-router state to report BIND as the active DNS service."
     }
   }
 }
@@ -167,4 +173,9 @@ resource "proxmox_virtual_environment_vm" "rigi" {
   lifecycle {
     replace_triggered_by = [terraform_data.config_revision]
   }
+
+  depends_on = [
+    opnsense_firewall_filter.rigi,
+    opnsense_firewall_filter.rigi_ipv6,
+  ]
 }

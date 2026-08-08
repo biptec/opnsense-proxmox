@@ -73,7 +73,7 @@ variable "wan" {
 }
 
 variable "routed_networks" {
-  description = "Tagged downstream networks routed by the primary router. Keys are stable inventory identifiers."
+  description = "Shared platform-owned routed networks only. Downstream host/service VLANs belong to their own Terraform states."
   type = map(object({
     vlan_id             = number
     subnet              = string
@@ -104,16 +104,6 @@ variable "internal_egress_networks" {
 variable "routed_public_subnets" {
   description = "Public routed subnets explicitly excluded from outbound NAT."
   type        = set(string)
-}
-
-variable "vpn_client_route" {
-  description = "Routed VPN client network reachable through a downstream service gateway."
-  type = object({
-    network         = string
-    via_network_key = string
-    gateway_address = string
-    gateway_name    = optional(string, "GW_VPN_CLIENTS")
-  })
 }
 
 variable "ntp_servers" {
@@ -149,18 +139,18 @@ variable "dns_zone" {
   default = {}
 }
 
-variable "dns_internal_client_networks" {
-  description = "Networks allowed to use the internal BIND view and recursive resolver."
+variable "trusted_internal_networks" {
+  description = "Trusted internal CIDRs allowed to reach primary management and internal services, including recursive DNS and NTP."
   type        = set(string)
   default     = ["10.0.0.0/8"]
 
   validation {
     condition = (
-      length(var.dns_internal_client_networks) > 0 &&
-      alltrue([for network in var.dns_internal_client_networks : can(cidrhost(network, 0))]) &&
-      anytrue([for network in var.dns_internal_client_networks : !strcontains(network, ":")])
+      length(var.trusted_internal_networks) > 0 &&
+      alltrue([for network in var.trusted_internal_networks : can(cidrhost(network, 0))]) &&
+      anytrue([for network in var.trusted_internal_networks : !strcontains(network, ":")])
     )
-    error_message = "dns_internal_client_networks must contain valid CIDRs and at least one IPv4 network."
+    error_message = "trusted_internal_networks must contain valid CIDRs and at least one IPv4 network."
   }
 }
 
@@ -189,28 +179,4 @@ variable "cutover" {
     condition     = var.cutover.dns_verify_timeout >= 5 && var.cutover.dns_verify_timeout <= 300
     error_message = "cutover.dns_verify_timeout must be between 5 and 300 seconds."
   }
-}
-
-variable "secondary_dns" {
-  description = "Optional Rigi secondary DNS/NTP integration. Values are fixed inventory identities; enabled stays false until Rigi is ready."
-  type = object({
-    enabled                 = optional(bool, false)
-    management_ipv4         = optional(string, "10.16.222.2")
-    internal_dns_ipv4       = optional(string, "10.16.18.53")
-    internal_dns_ipv6       = optional(string, "2a07:e580:a10:1234::2")
-    internal_ntp_ipv4       = optional(string, "10.16.18.122")
-    internal_ntp_ipv6       = optional(string, "2a07:e580:a10:1278::2")
-    public_dns_ipv4         = optional(string, "5.9.227.114")
-    transfer_tsig_name      = optional(string, "secondary-transfer.biptec.net")
-    transfer_tsig_algorithm = optional(string, "hmac-sha256")
-  })
-  default = {}
-}
-
-variable "secondary_transfer_tsig_secret" {
-  description = "Base64 TSIG secret shared with Rigi for authenticated AXFR/IXFR and NOTIFY. Keep it supplied through the secondary detach apply; omit it only after the primary zones no longer reference the key."
-  type        = string
-  default     = null
-  nullable    = true
-  sensitive   = true
 }

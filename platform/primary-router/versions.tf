@@ -4,7 +4,7 @@ terraform {
   required_providers {
     opnsense = {
       source  = "biptec/opnsense"
-      version = "~> 0.29.1"
+      version = "~> 0.29.2"
     }
     external = {
       source  = "hashicorp/external"

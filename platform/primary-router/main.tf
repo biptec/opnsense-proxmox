@@ -93,14 +93,6 @@ resource "terraform_data" "platform_contract" {
     }
 
     precondition {
-      condition = (
-        contains(keys(var.routed_networks), var.vpn_client_route.via_network_key) &&
-        cidrcontains(var.routed_networks[var.vpn_client_route.via_network_key].subnet, var.vpn_client_route.gateway_address)
-      )
-      error_message = "The VPN client route gateway must belong to its selected downstream routed network."
-    }
-
-    precondition {
       condition     = (var.cutover.dns_target == "bind") == var.cutover.public_dns_vip
       error_message = "The public DNS VIP must be attached exactly when BIND is the selected DNS owner. This prevents wildcard Unbound from being exposed on the public DNS identity."
     }
@@ -111,30 +103,12 @@ resource "terraform_data" "platform_contract" {
     }
 
     precondition {
-      condition     = !var.secondary_dns.enabled || local.secondary_transfer_secret_present
-      error_message = "secondary_dns.enabled requires a non-empty Base64 secondary_transfer_tsig_secret."
-    }
-
-    precondition {
-      condition = !local.secondary_transfer_secret_present || (
-        try(length(var.secondary_transfer_tsig_secret) % 4 == 0, false) &&
-        try(can(regex("^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$", var.secondary_transfer_tsig_secret)), false)
-      )
-      error_message = "secondary_transfer_tsig_secret must be canonical Base64 when supplied."
-    }
-
-    precondition {
-      condition = !var.secondary_dns.enabled || alltrue([
-        for address in [
-          var.secondary_dns.management_ipv4,
-          var.secondary_dns.internal_dns_ipv4,
-          var.secondary_dns.internal_ntp_ipv4,
-          var.secondary_dns.public_dns_ipv4,
-          ] : anytrue([
-            for network in values(var.routed_networks) : cidrcontains(network.subnet, address)
-        ])
-      ])
-      error_message = "Rigi secondary identities must remain inside the routed host, DNS2, NTP2, and public transport networks."
+      condition = (
+        var.management_ssh_ipv6_cidr == null &&
+        var.management_web_ipv6_cidr == null &&
+        alltrue([for network in values(var.service_networks) : network.ipv6_subnet == null])
+      ) || anytrue([for network in var.trusted_internal_networks : strcontains(network, ":")])
+      error_message = "IPv6 management/service endpoints require at least one trusted IPv6 CIDR in trusted_internal_networks."
     }
 
     precondition {
@@ -235,22 +209,6 @@ resource "opnsense_interfaces_assignment" "routed" {
     address = each.value.router_ipv6_address
     prefix  = each.value.ipv6_subnet == null ? null : tonumber(split("/", each.value.ipv6_subnet)[1])
   }
-}
-
-resource "opnsense_routing_gateway" "vpn_clients" {
-  name            = var.vpn_client_route.gateway_name
-  interface       = opnsense_interfaces_assignment.routed[var.vpn_client_route.via_network_key].name
-  gateway         = var.vpn_client_route.gateway_address
-  ip_protocol     = "inet"
-  default_gateway = false
-  monitor_disable = true
-  description     = "VPN client network next hop"
-}
-
-resource "opnsense_route" "vpn_clients" {
-  gateway     = opnsense_routing_gateway.vpn_clients.name
-  network     = var.vpn_client_route.network
-  description = "VPN client network"
 }
 
 module "router_foundation" {

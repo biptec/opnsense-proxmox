@@ -1,10 +1,15 @@
+output "trunk_parent_device" {
+  description = "FreeBSD parent device used for Etna tagged VLANs; downstream states use it when creating their own Etna-side VLANs."
+  value       = var.trunk_parent_device
+}
+
 output "wan_interface" {
   description = "Logical OPNsense interface created for VLAN 3801 WAN."
   value       = opnsense_interfaces_assignment.wan.name
 }
 
 output "routed_interfaces" {
-  description = "Logical OPNsense interface name for each routed VLAN."
+  description = "Logical OPNsense interface name for each shared platform-owned routed VLAN."
   value = {
     for name, assignment in opnsense_interfaces_assignment.routed : name => assignment.name
   }
@@ -45,6 +50,16 @@ output "routed_public_subnets" {
   value       = module.router_egress.routed_public_subnets
 }
 
+output "trusted_internal_networks" {
+  description = "Trusted internal CIDRs used by primary internal-service policy and downstream infrastructure services."
+  value       = var.trusted_internal_networks
+}
+
+output "dns_zone_name" {
+  description = "Authoritative DNS zone name consumed by downstream DNS states."
+  value       = var.dns_zone.name
+}
+
 output "dns_internal_view_id" {
   description = "BIND internal split-DNS view UUID for dependent site states."
   value       = opnsense_bind_view.internal.id
@@ -83,14 +98,4 @@ output "internal_caddy_address" {
 output "internal_ntp_address" {
   description = "Portable internal NTP IPv4 endpoint."
   value       = local.internal_ntp_ipv4
-}
-
-output "secondary_dns_enabled" {
-  description = "Whether Rigi transfer/NS/firewall integration is active in the primary state."
-  value       = var.secondary_dns.enabled
-}
-
-output "secondary_public_dns_address" {
-  description = "Rigi public DNS2 address when secondary integration is enabled."
-  value       = var.secondary_dns.enabled ? var.secondary_dns.public_dns_ipv4 : null
 }

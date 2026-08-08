@@ -50,6 +50,9 @@ assert {p["from"]: p["table"] for p in network["vlans"]["public"]["routing-polic
     "5.9.227.114/32"
 ] == 3802
 assert network["vlans"]["alcor"]["nameservers"]["addresses"] == ["10.16.16.53"]
+alcor_routes = {r["to"]: r for r in network["vlans"]["alcor"]["routes"]}
+assert alcor_routes["10.0.0.0/8"]["via"] == "10.16.18.54"
+assert alcor_routes["2a07:e580:a10::/48"]["via"] == "2a07:e580:a10:1234::1"
 
 bind = payload["bind_options"] + "\n" + payload["bind_local"]
 assert 'listen-on port 53 { 10.16.18.53; 5.9.227.114; };' in bind

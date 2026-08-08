@@ -1,6 +1,6 @@
 # Primary router platform root
 
-This root composes the shared Etna router state. It owns common L3 networking and router-hosted services, not site-specific DNS records, Caddy domains, handlers, or backend policy.
+This root composes the shared Etna router state. It owns shared L3 transport and router-hosted services, not site-specific DNS records, Caddy domains, handlers, or backend policy.
 
 ## Proxmox prerequisites
 
@@ -39,18 +39,20 @@ The helper is idempotent and uses only `tofu state show` and `tofu import`; it d
 
 ## Ownership
 
-This state owns:
+This state owns only Etna and shared transport:
 
 - VLAN `3801` WAN and its default gateway;
-- every routed VLAN listed in the Etna routing inventory;
 - VLAN `3802` routed public transport;
-- the VPN client static route through Vela;
 - Etna management IP aliases;
-- portable DNS, NTP, Caddy, and NAT `/30` loopbacks and reserved VLAN identities;
-- BIND/Caddy base settings and NTP service binding;
-- dedicated outbound-NAT identity and NO-NAT policy when explicitly activated.
+- portable DNS1, NTP1, Caddy, and Source NAT `/30` loopbacks and reserved VLAN identities;
+- BIND/Caddy base settings and NTP1 service binding;
+- dedicated outbound-NAT identity and shared NO-NAT policy when explicitly activated.
 
-The VM bootstrap state owns Etna's primary management IPv4 `10.16.214.2/30`. Site states must not manage any resource listed above.
+It does **not** pre-create downstream host/service VLANs, routes, firewall rules, secondary DNS configuration, or application-specific resources. Each downstream Terraform state owns both its workload and every additive Etna resource required by that workload. Destroying that state therefore removes its router integration as well.
+
+The VM bootstrap state owns Etna's primary management IPv4 `10.16.214.2/30`. Downstream states may consume primary outputs such as the shared VLAN `3802` interface and BIND zone IDs, but must not own or delete shared transport or Etna-local services.
+
+The primary state must outlive every downstream state. Destroy downstream workloads first so each state can remove its own Etna integration before shared interfaces/zones are removed.
 
 ## Safe first apply
 
@@ -58,7 +60,7 @@ All cutover flags default to false. The initial platform apply therefore does no
 
 The first ownership apply intentionally changes the imported WebGUI/SSH listener configuration, so run it once with `allow_management_readdress = true`. Use `-parallelism=1`: OPNsense serializes configd writes and a parallel first apply can create a long lock queue. After that apply succeeds, immediately apply the same safe configuration again with the default `allow_management_readdress = false` to relock the guard. Subsequent plans should keep the guard false unless a reviewed management readdress is intentional.
 
-`terraform.tfvars.example` contains the approved Etna/Rigi production-like addressing. Copy it to a gitignored `.tfvars` file for the test deployment; secrets stay in environment variables.
+`terraform.tfvars.example` contains only approved Etna and shared-transport addressing. Downstream addressing belongs to its own state. Copy it to a gitignored `.tfvars` file for the test deployment; secrets stay in environment variables.
 
 ## DNS and firewall cutover
 
@@ -82,9 +84,9 @@ cutover = {
 
 The dependency graph attaches the VIP, runs the guarded DNS cutover, verifies BIND, and only then enables WAN TCP/UDP 53 rules. This avoids a window where wildcard Unbound is publicly reachable through the DNS VIP. After a successful transition, return `allow_dns_cutover` to `false` while keeping `dns_target = "bind"` and `public_dns_vip = true`.
 
-Internal DNS recursion is allowed only for `dns_internal_client_networks` and only on the internal DNS destination. The public view matches the public DNS destination, permits authoritative queries, and has recursion disabled.
+Internal DNS recursion is allowed only for `trusted_internal_networks` and only on the internal DNS destination. The public view matches the public DNS destination, permits authoritative queries, and has recursion disabled.
 
-NTP has no WAN rule. Internal UDP/123 opens only when `ntp_serving = true`. Public Caddy TCP/80 and TCP/443 opens only when Caddy and its public VIP are explicitly activated. The outbound NAT mode is always owned by this state: `automatic` while egress is safe/detached and `hybrid` while explicit NO-NAT/SNAT rules are active. General IPv4 egress excludes RFC1918 destinations, so enabling Internet access does not implicitly enable lateral private-network routing.
+NTP has no WAN rule. Internal UDP/123 opens only when `ntp_serving = true`. Public Caddy TCP/80 and TCP/443 opens only when Caddy and its public VIP are explicitly activated. Primary-owned internal service and management rules apply on every Etna ingress interface except WAN, constrained by their source/destination identities; this lets future downstream states reach primary services without the primary state enumerating their interfaces. The outbound NAT mode is always owned by this state: `automatic` while egress is safe/detached and `hybrid` while explicit NO-NAT/SNAT rules are active. Downstream states own the firewall pass rules that permit their workloads to use that shared egress policy.
 
 ## Management endpoint cutover
 
@@ -99,29 +101,12 @@ cutover = {
 }
 ```
 
-The final policy permits SSH on `.2:22`, WebGUI/API on `.6:443`, and blocks the inverse port/address combinations. These destination rules apply on the direct management NIC and every routed internal ingress interface, so VPN/VLAN clients get the same endpoint split while the direct Proxmox rescue path remains available. The same policy is applied to the configured IPv6 management identities.
+The final policy permits SSH on `.2:22`, WebGUI/API on `.6:443`, and blocks the inverse port/address combinations. These destination rules apply on every Etna ingress interface except WAN, so current and future VPN/VLAN clients get the same endpoint split without being declared in this state, while the direct Proxmox rescue path remains available. The same policy is applied to the configured IPv6 management identities.
 
-## Secondary DNS integration
+## Downstream integration contract
 
-Rigi is a separate Terraform state. Keep `secondary_dns.enabled = false` until that state is ready to create the VM. Then supply the same protected transfer TSIG secret to both states and enable secondary integration in this root.
+The primary root intentionally contains no Rigi/VPN/Uyuni/Directory-specific configuration. It exports shared identifiers (`wan_interface`, `routed_interfaces`, BIND view/zone IDs, and service addresses) for downstream states.
 
-Enabling Rigi adds, in the same primary state:
-
-- one dedicated BIND transfer TSIG key;
-- authenticated `allow-transfer`/`also-notify` on both internal and public `biptec.net` zone copies;
-- internal `ns2` -> `10.16.18.53` (+ IPv6) and public `ns2` -> `5.9.227.114`;
-- internal DNS2 and NTP2 firewall policy;
-- public TCP/UDP 53 forwarding to `5.9.227.114`;
-- routed-public egress for Rigi without NAT;
-- no public UDP/123 rule.
-
-Rigi's public refresh/transfer traffic to the primary DNS VIP is explicitly allowed from VLAN `3802`. The routed-public `/29` remains covered by the platform NO-NAT policy.
-
-### Secondary detach / rollback
-
-Disable secondary integration in two Terraform applies so BIND never sees a zone referencing a removed TSIG key:
-
-1. Keep `secondary_transfer_tsig_secret` supplied, set `secondary_dns.enabled = false`, and perform the guarded DNS rollback if BIND is also being disabled. This removes NS2/NOTIFY and explicitly clears each zone transfer-key reference while retaining the key object.
-2. After that apply succeeds, omit `secondary_transfer_tsig_secret` and apply the normal safe configuration. The now-unreferenced TSIG key is removed and the DNS cutover guard returns to `false`.
+For example, the secondary-DNS state creates Rigi and also creates its VLAN `508`, VLAN `2804`, VLAN `2820`, Etna-side gateway addresses, firewall rules, NS2 records, TSIG key, and primary-zone transfer attachment. Its destroy removes those resources while leaving the primary zones and shared VLAN `3802` intact.
 
 The safe state also returns outbound NAT mode to `automatic`; it does not merely remove NAT resources from Terraform state.
