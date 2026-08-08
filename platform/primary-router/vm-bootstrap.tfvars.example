@@ -5,8 +5,13 @@ node_name       = "tofana"
 vm_name         = "etna"
 vm_datastore    = "local-vmdata01"
 image_datastore = "local"
-bridge          = "vmbr0"
+bridge          = "vmbr2"
 dns_domain      = "host.biptec.net"
+
+# Etna must be available after a Tofana reboot while the host is still in
+# persistent rescue mode. wan-cutover never starts or stops the VM itself.
+vm_started = true
+vm_on_boot = true
 
 management_ipv4 = {
   mode    = "static"

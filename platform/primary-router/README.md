@@ -4,22 +4,22 @@ This root composes the shared Etna router state. It owns shared L3 transport and
 
 ## Proxmox prerequisites
 
-The Proxmox host remains a separate, persistent management domain:
+The Proxmox host remains a separate, persistent management and recovery domain:
 
-- `vmbr0` is the untagged management bridge used by Etna NIC0;
-- `vmbr1` is the VLAN-aware trunk bridge used by Etna NIC1;
-- in the final production state, the provider-facing physical WAN NIC is an access port for VLAN `3801` on `vmbr1`;
-- before router cutover, that physical NIC has no access/PVID mapping for VLAN `3801`, so Etna VLAN `3801` has no provider-facing L2 path;
-- provider-facing Ethernet is untagged; after cutover Etna sees VLAN `3801` tagged inside `vmbr1`;
-- the current `bpg/proxmox` bridge resource does not expose per-port `bridge-access`, so this host-port change is a reviewed cutover action rather than a router-state resource;
+- `vmbr0` is the persistent rescue WAN bridge. After every Tofana boot it owns physical `nic0`, `138.201.128.112/26`, and gateway `138.201.128.65`;
+- `vmbr1` is the VLAN-aware production trunk used by Etna NIC1. It keeps the explicit bridge MAC `72:36:cd:de:1d:28` and has no physical provider port in rescue state;
+- `vmbr2` is a dedicated host-only management bridge used by Etna NIC0. It is independent of both rescue WAN and production trunk;
+- Etna NIC1 owns provider MAC `90:1b:0e:95:a1:0b` from first boot. During runtime handoff physical `nic0` must therefore use a distinct locally-administered MAC while both ports share `vmbr1`;
+- normal operation attaches `nic0` to `vmbr1` as untagged access/PVID VLAN `3801`; Etna sees VLAN `3801` tagged;
+- `proxmox-wan-cutover` performs that handoff only in runtime. It never rewrites the persistent Tofana network configuration, so reboot restores direct rescue WAN ownership before the delayed cutover window expires.
 
-Do not move the live Proxmox WAN address/gateway during a test apply. The host-side cutover is a separate reviewed operation.
+Do not move the live Proxmox WAN address/gateway during a test apply. The host-side handoff is a separate reviewed runtime operation.
 
 `vm-bootstrap.tfvars.example` is the Etna-owned overlay for the generic `../../tofu` VM root. It now carries the known Etna node/storage/network values, including `local-vmdata01`.
 
 The VM bootstrap and router configuration intentionally use two Terraform states, but they are one Etna ownership domain. The split is a bootstrap dependency, not an architectural ownership split: the OPNsense provider cannot read/import/configure Etna until the VM exists, boots, and exposes its API. Keep both Etna value files in this directory; apply the VM bootstrap state first, then the primary-router state. Destroy in reverse order.
 
-Copy `vm-bootstrap.tfvars.example` to the gitignored `vm-bootstrap.tfvars` and add the normal secret/image inputs outside Git. The production provider-facing MAC `90:1b:0e:95:a1:0b` is assigned to Etna NIC1 by Terraform from its first boot. This is safe before router cutover because Etna is on `vmbr1` while the physical `nic0` still belongs to the separate `vmbr0`; VLAN `3801` therefore has no provider-facing L2 path. Follow `../DEPLOYMENT_RUNBOOK.md` for the host-side WAN cutover.
+Copy `vm-bootstrap.tfvars.example` to the gitignored `vm-bootstrap.tfvars` and add the normal secret/image inputs outside Git. Terraform places Etna management NIC0 on host-only `vmbr2`, starts Etna automatically after Tofana boots, and assigns provider MAC `90:1b:0e:95:a1:0b` to Etna NIC1 on `vmbr1`. Before cutover, physical `nic0` remains on rescue `vmbr0`, so Etna WAN has no provider-facing L2 path. Follow `../DEPLOYMENT_RUNBOOK.md` and `proxmox-wan-cutover` for the host-side handoff.
 
 ## Bootstrap
 
