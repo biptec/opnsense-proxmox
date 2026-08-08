@@ -1,12 +1,17 @@
 locals {
-  management_ssh_ipv4 = split("/", var.management_ssh_ipv4_cidr)[0]
-  management_web_ipv4 = split("/", var.management_web_ipv4_cidr)[0]
-  wan_primary_address = split("/", var.wan.primary_cidr)[0]
-  wan_primary_prefix  = tonumber(split("/", var.wan.primary_cidr)[1])
+  management_ssh_ipv4      = split("/", var.management_ssh_ipv4_cidr)[0]
+  management_web_ipv4      = split("/", var.management_web_ipv4_cidr)[0]
+  wan_primary_address      = split("/", var.wan.primary_cidr)[0]
+  wan_primary_prefix       = tonumber(split("/", var.wan.primary_cidr)[1])
+  wan_primary_ipv6_address = split("/", var.wan.primary_ipv6_cidr)[0]
+  wan_primary_ipv6_prefix  = tonumber(split("/", var.wan.primary_ipv6_cidr)[1])
 
   routed_public_subnets = toset([
     for network in values(var.routed_public_networks) : network.subnet
   ])
+  routed_public_ipv6_subnets = toset(compact([
+    for network in values(var.routed_public_networks) : network.ipv6_subnet
+  ]))
 
   foundation_service_networks = {
     for name, network in var.service_networks : name => {
@@ -60,6 +65,16 @@ locals {
 
   current_webgui_certificate_ref = var.webgui_certificate_ref != null ? var.webgui_certificate_ref : try(data.external.current_webgui[0].result.certificate_ref, "")
 
+  reserved_ipv6_addresses = toset(concat(
+    [
+      local.wan_primary_ipv6_address,
+      var.wan.public_dns_ipv6_address,
+      var.wan.public_proxy_ipv6_address,
+    ],
+    values(module.router_foundation.service_ipv6_addresses),
+    compact([for network in values(var.routed_public_networks) : network.router_ipv6_address]),
+  ))
+
   reserved_ipv4_addresses = toset(concat(
     [
       local.management_ssh_ipv4,
@@ -100,6 +115,16 @@ resource "terraform_data" "platform_contract" {
         cidrcontains(var.wan.primary_cidr, var.wan.dedicated_egress_address)
       )
       error_message = "WAN gateway and all /32 service identities must belong to the connected primary WAN prefix."
+    }
+
+    precondition {
+      condition = (
+        var.wan.ipv6_gateway == "fe80::1" &&
+        cidrcontains(var.wan.primary_ipv6_cidr, var.wan.public_dns_ipv6_address) &&
+        cidrcontains(var.wan.primary_ipv6_cidr, var.wan.public_proxy_ipv6_address) &&
+        cidrcontains(var.wan.primary_ipv6_cidr, var.wan.dedicated_egress_ipv6_address)
+      )
+      error_message = "WAN IPv6 must use Hetzner link-local gateway fe80::1 and all dedicated IPv6 identities must belong to the connected WAN /64."
     }
 
     precondition {
@@ -193,7 +218,9 @@ resource "opnsense_interfaces_assignment" "wan" {
   }
 
   ipv6 = {
-    mode = "none"
+    mode    = "static"
+    address = local.wan_primary_ipv6_address
+    prefix  = local.wan_primary_ipv6_prefix
   }
 }
 
@@ -204,7 +231,17 @@ resource "opnsense_routing_gateway" "wan" {
   ip_protocol     = "inet"
   default_gateway = true
   monitor_disable = true
-  description     = "Provider WAN gateway"
+  description     = "Provider WAN IPv4 gateway"
+}
+
+resource "opnsense_routing_gateway" "wan_ipv6" {
+  name            = "GW_WAN_V6"
+  interface       = opnsense_interfaces_assignment.wan.name
+  gateway         = var.wan.ipv6_gateway
+  ip_protocol     = "inet6"
+  default_gateway = true
+  monitor_disable = true
+  description     = "Provider WAN IPv6 gateway"
 }
 
 resource "opnsense_interfaces_vlan" "routed" {
@@ -278,38 +315,46 @@ module "router_foundation" {
 module "router_services" {
   source = "../../modules/router-services"
 
-  wan_interface            = opnsense_interfaces_assignment.wan.name
-  management_address       = module.router_foundation.management_address
-  wan_primary_address      = local.wan_primary_address
-  wan_primary_prefix       = local.wan_primary_prefix
-  wan_gateway              = var.wan.gateway
-  api_extensions_plugin_id = module.router_foundation.api_extensions_plugin_id
-  public_dns_address       = var.wan.public_dns_address
-  public_dns_vip_enabled   = var.cutover.public_dns_vip
-  public_caddy_address     = var.wan.public_proxy_address
-  public_caddy_vip_enabled = var.cutover.public_proxy_vip
-  service_addresses        = local.router_services_ipv4
-  service_ipv6_addresses   = local.router_services_ipv6
-  service_interfaces       = local.router_services_interfaces
-  bind_enabled             = null
-  caddy_enabled            = var.cutover.proxy_enabled
-  ntp_enabled              = true
-  ntp_serve_clients        = var.cutover.ntp_serving
-  ntp_servers              = var.ntp_servers
+  wan_interface             = opnsense_interfaces_assignment.wan.name
+  management_address        = module.router_foundation.management_address
+  wan_primary_address       = local.wan_primary_address
+  wan_primary_prefix        = local.wan_primary_prefix
+  wan_gateway               = var.wan.gateway
+  api_extensions_plugin_id  = module.router_foundation.api_extensions_plugin_id
+  public_dns_address        = var.wan.public_dns_address
+  public_dns_ipv6_address   = var.wan.public_dns_ipv6_address
+  public_dns_vip_enabled    = var.cutover.public_dns_vip
+  public_caddy_address      = var.wan.public_proxy_address
+  public_caddy_ipv6_address = var.wan.public_proxy_ipv6_address
+  public_caddy_vip_enabled  = var.cutover.public_proxy_vip
+  service_addresses         = local.router_services_ipv4
+  service_ipv6_addresses    = local.router_services_ipv6
+  service_interfaces        = local.router_services_interfaces
+  bind_enabled              = null
+  caddy_enabled             = var.cutover.proxy_enabled
+  ntp_enabled               = true
+  ntp_serve_clients         = var.cutover.ntp_serving
+  ntp_servers               = var.ntp_servers
 }
 
 module "router_egress" {
   source = "../../modules/router-egress"
 
-  wan_interface             = opnsense_interfaces_assignment.wan.name
-  wan_primary_address       = local.wan_primary_address
-  wan_primary_prefix        = local.wan_primary_prefix
-  wan_gateway               = var.wan.gateway
-  dedicated_egress_address  = var.wan.dedicated_egress_address
-  reserved_addresses        = local.reserved_ipv4_addresses
-  service_binding_guard     = module.router_services.service_binding_guard
-  public_egress_vip_enabled = var.cutover.egress_vip
-  outbound_nat_enabled      = var.cutover.outbound_nat
-  internal_egress_networks  = var.internal_egress_networks
-  routed_public_subnets     = local.routed_public_subnets
+  wan_interface                 = opnsense_interfaces_assignment.wan.name
+  wan_primary_address           = local.wan_primary_address
+  wan_primary_prefix            = local.wan_primary_prefix
+  wan_primary_ipv6_address      = local.wan_primary_ipv6_address
+  wan_primary_ipv6_prefix       = local.wan_primary_ipv6_prefix
+  wan_gateway                   = var.wan.gateway
+  dedicated_egress_address      = var.wan.dedicated_egress_address
+  dedicated_egress_ipv6_address = var.wan.dedicated_egress_ipv6_address
+  reserved_addresses            = local.reserved_ipv4_addresses
+  reserved_ipv6_addresses       = local.reserved_ipv6_addresses
+  service_binding_guard         = module.router_services.service_binding_guard
+  public_egress_vip_enabled     = var.cutover.egress_vip
+  outbound_nat_enabled          = var.cutover.outbound_nat
+  internal_egress_networks      = var.internal_egress_networks
+  internal_egress_ipv6_networks = var.internal_egress_ipv6_networks
+  routed_public_subnets         = local.routed_public_subnets
+  routed_public_ipv6_subnets    = local.routed_public_ipv6_subnets
 }

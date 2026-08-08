@@ -88,8 +88,22 @@ variable "public_dns_address" {
   }
 }
 
+variable "public_dns_ipv6_address" {
+  description = "Dedicated public IPv6 address for authoritative DNS."
+  type        = string
+
+  validation {
+    condition = (
+      !strcontains(var.public_dns_ipv6_address, "/") &&
+      strcontains(var.public_dns_ipv6_address, ":") &&
+      can(cidrhost("${var.public_dns_ipv6_address}/128", 0))
+    )
+    error_message = "public_dns_ipv6_address must be an IPv6 address without a prefix."
+  }
+}
+
 variable "public_dns_vip_enabled" {
-  description = "Attach the public DNS IP Alias to WAN. Keep false until the guarded DNS cutover and ingress policy are ready."
+  description = "Attach the public DNS IPv4/IPv6 aliases to WAN. Keep false until the guarded DNS cutover and ingress policy are ready."
   type        = bool
   default     = false
 }
@@ -109,8 +123,22 @@ variable "public_caddy_address" {
   }
 }
 
+variable "public_caddy_ipv6_address" {
+  description = "Dedicated public IPv6 address for Caddy HTTP and HTTPS ingress."
+  type        = string
+
+  validation {
+    condition = (
+      !strcontains(var.public_caddy_ipv6_address, "/") &&
+      strcontains(var.public_caddy_ipv6_address, ":") &&
+      can(cidrhost("${var.public_caddy_ipv6_address}/128", 0))
+    )
+    error_message = "public_caddy_ipv6_address must be an IPv6 address without a prefix."
+  }
+}
+
 variable "public_caddy_vip_enabled" {
-  description = "Attach the public Caddy IP Alias to WAN. Keep false until Caddy configuration and ingress policy are ready."
+  description = "Attach the public Caddy IPv4/IPv6 aliases to WAN. Keep false until Caddy configuration and ingress policy are ready."
   type        = bool
   default     = false
 }

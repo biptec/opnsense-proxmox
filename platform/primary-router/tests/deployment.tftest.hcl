@@ -45,20 +45,27 @@ variables {
   webgui_certificate_ref   = "test-certificate-ref"
 
   wan = {
-    vlan_id                  = 3801
-    primary_cidr             = "198.51.100.112/26"
-    gateway                  = "198.51.100.65"
-    public_proxy_address     = "198.51.100.87"
-    public_dns_address       = "198.51.100.88"
-    dedicated_egress_address = "198.51.100.95"
+    vlan_id                       = 3801
+    primary_cidr                  = "198.51.100.112/26"
+    gateway                       = "198.51.100.65"
+    primary_ipv6_cidr             = "2001:db8:ffff::112/64"
+    ipv6_gateway                  = "fe80::1"
+    public_proxy_address          = "198.51.100.87"
+    public_proxy_ipv6_address     = "2001:db8:ffff::87"
+    public_dns_address            = "198.51.100.88"
+    public_dns_ipv6_address       = "2001:db8:ffff::88"
+    dedicated_egress_address      = "198.51.100.95"
+    dedicated_egress_ipv6_address = "2001:db8:ffff::95"
   }
 
   routed_public_networks = {
     public_transport = {
-      vlan_id        = 3802
-      subnet         = "203.0.113.112/29"
-      router_address = "203.0.113.113"
-      description    = "Routed public transport"
+      vlan_id             = 3802
+      subnet              = "203.0.113.112/29"
+      router_address      = "203.0.113.113"
+      ipv6_subnet         = "2001:db8:200::/64"
+      router_ipv6_address = "2001:db8:200::113"
+      description         = "Routed public transport"
     }
   }
 
@@ -69,7 +76,8 @@ variables {
     nat   = { vlan_id = 2822, subnet = "10.16.16.92/30", service_ipv4_address = "10.16.16.94", ipv6_subnet = "2001:db8:92::/64" }
   }
 
-  trusted_internal_networks = ["10.0.0.0/8", "2001:db8::/32"]
+  trusted_internal_networks     = ["10.0.0.0/8", "2001:db8::/32"]
+  internal_egress_ipv6_networks = ["2001:db8::/32"]
 }
 
 run "safe_platform_composition" {
@@ -80,7 +88,11 @@ run "safe_platform_composition" {
       opnsense_interfaces_vlan.wan.tag == 3801 &&
       opnsense_interfaces_assignment.wan.ipv4.address == "198.51.100.112" &&
       opnsense_interfaces_assignment.wan.ipv4.prefix == 26 &&
-      opnsense_routing_gateway.wan.gateway == "198.51.100.65"
+      opnsense_interfaces_assignment.wan.ipv6.address == "2001:db8:ffff::112" &&
+      opnsense_interfaces_assignment.wan.ipv6.prefix == 64 &&
+      opnsense_routing_gateway.wan.gateway == "198.51.100.65" &&
+      opnsense_routing_gateway.wan_ipv6.gateway == "fe80::1" &&
+      opnsense_routing_gateway.wan_ipv6.ip_protocol == "inet6"
     )
     error_message = "WAN must be VLAN 3801 with the approved primary address and on-link gateway."
   }
@@ -88,7 +100,9 @@ run "safe_platform_composition" {
   assert {
     condition = (
       length(opnsense_interfaces_vlan.routed) == 1 &&
-      opnsense_interfaces_vlan.routed["public_transport"].tag == 3802
+      opnsense_interfaces_vlan.routed["public_transport"].tag == 3802 &&
+      opnsense_interfaces_assignment.routed["public_transport"].ipv6.address == "2001:db8:200::113" &&
+      opnsense_interfaces_assignment.routed["public_transport"].ipv6.prefix == 64
     )
     error_message = "Primary router state must own only shared routed transport, not downstream service VLANs."
   }
@@ -107,8 +121,11 @@ run "safe_platform_composition" {
       output.dns_zone_name == "biptec.net" &&
       output.trusted_internal_networks == toset(["10.0.0.0/8", "2001:db8::/32"]) &&
       output.public_dns_address == "198.51.100.88" &&
+      output.public_dns_ipv6_address == "2001:db8:ffff::88" &&
       output.public_proxy_address == "198.51.100.87" &&
-      output.dedicated_egress_address == "198.51.100.95"
+      output.public_proxy_ipv6_address == "2001:db8:ffff::87" &&
+      output.dedicated_egress_address == "198.51.100.95" &&
+      output.dedicated_egress_ipv6_address == "2001:db8:ffff::95"
     )
     error_message = "Public DNS, reverse-proxy, and Source NAT identities must remain separate."
   }
@@ -119,8 +136,10 @@ run "safe_platform_composition" {
       output.downstream_router_contract.wan_interface == "opt10" &&
       output.downstream_router_contract.routed_interfaces["public_transport"] == "opt10" &&
       output.downstream_router_contract.routed_public_networks["public_transport"].subnet == "203.0.113.112/29" &&
+      output.downstream_router_contract.routed_public_networks["public_transport"].ipv6_subnet == "2001:db8:200::/64" &&
       output.downstream_router_contract.internal_dns_ipv4 == "10.16.16.53" &&
-      output.downstream_router_contract.public_dns_ipv4 == "198.51.100.88"
+      output.downstream_router_contract.public_dns_ipv4 == "198.51.100.88" &&
+      output.downstream_router_contract.public_dns_ipv6 == "2001:db8:ffff::88"
     )
     error_message = "The generic downstream contract must export primary-owned references without embedding downstream-specific data."
   }
@@ -128,8 +147,11 @@ run "safe_platform_composition" {
   assert {
     condition = (
       module.router_services.public_dns_vip_id == null &&
+      module.router_services.public_dns_ipv6_vip_id == null &&
       module.router_services.public_caddy_vip_id == null &&
+      module.router_services.public_caddy_ipv6_vip_id == null &&
       module.router_egress.dedicated_egress_vip_id == null &&
+      module.router_egress.dedicated_egress_ipv6_vip_id == null &&
       !module.router_egress.outbound_nat_enabled
     )
     error_message = "The composition must remain detached from public cutover by default."
@@ -144,7 +166,8 @@ run "safe_platform_composition" {
       opnsense_bind_primary_domain.internal.dnssec &&
       opnsense_bind_primary_domain.public.dnssec &&
       opnsense_bind_record.internal_ns_ipv4.value == "10.16.16.53" &&
-      opnsense_bind_record.public_ns_ipv4.value == "198.51.100.88"
+      opnsense_bind_record.public_ns_ipv4.value == "198.51.100.88" &&
+      opnsense_bind_record.public_ns_ipv6.value == "2001:db8:ffff::88"
     )
     error_message = "Internal/public BIND views and split primary NS records must follow the platform DNS contract."
   }
@@ -164,6 +187,8 @@ run "safe_platform_composition" {
       !opnsense_dns_service_cutover.primary.allow_cutover &&
       !opnsense_firewall_filter.platform_ipv4["public_dns_tcp"].enabled &&
       !opnsense_firewall_filter.platform_ipv4["public_dns_udp"].enabled &&
+      !opnsense_firewall_filter.platform_ipv6["public_dns_tcp_ipv6"].enabled &&
+      !opnsense_firewall_filter.platform_ipv6["public_dns_udp_ipv6"].enabled &&
       opnsense_firewall_filter.platform_ipv4["management_ssh"].enabled &&
       opnsense_firewall_filter.platform_ipv4["management_web"].enabled &&
       !opnsense_firewall_filter.platform_ipv4["block_web_on_ssh_identity"].enabled
@@ -225,12 +250,15 @@ run "guarded_bind_cutover" {
   assert {
     condition = (
       module.router_services.public_dns_vip_id != null &&
+      module.router_services.public_dns_ipv6_vip_id != null &&
       opnsense_dns_service_cutover.primary.target == "bind" &&
       opnsense_dns_service_cutover.primary.allow_cutover &&
       opnsense_firewall_filter.platform_ipv4["internal_dns_tcp"].enabled &&
       opnsense_firewall_filter.platform_ipv4["internal_dns_udp"].enabled &&
       opnsense_firewall_filter.platform_ipv4["public_dns_tcp"].enabled &&
-      opnsense_firewall_filter.platform_ipv4["public_dns_udp"].enabled
+      opnsense_firewall_filter.platform_ipv4["public_dns_udp"].enabled &&
+      opnsense_firewall_filter.platform_ipv6["public_dns_tcp_ipv6"].enabled &&
+      opnsense_firewall_filter.platform_ipv6["public_dns_udp_ipv6"].enabled
     )
     error_message = "BIND cutover must attach the DNS VIP and activate only DNS-specific ingress policy."
   }

@@ -31,6 +31,7 @@ ntp_internal = {
 
 public = {
   ipv4_cidr = "5.9.227.114/29"
+  ipv6_cidr = "2a01:4f8:fff3:107::114/64"
 }
 
 # The primary-router integration contract contains dynamic OPNsense IDs/names and

@@ -135,9 +135,10 @@ variable "ntp_internal" {
 }
 
 variable "public" {
-  description = "Rigi public DNS IPv4/CIDR on the primary-owned routed-public transport. VLAN and gateway come from the primary-router contract."
+  description = "Rigi public DNS IPv4/IPv6 identities on the primary-owned routed-public transport. VLAN and gateways come from the primary-router contract."
   type = object({
     ipv4_cidr = string
+    ipv6_cidr = string
   })
 }
 
@@ -161,6 +162,7 @@ variable "primary_router" {
     trusted_internal_networks = set(string)
     internal_dns_ipv4         = string
     public_dns_ipv4           = string
+    public_dns_ipv6           = string
     dns_active_service        = string
   })
 

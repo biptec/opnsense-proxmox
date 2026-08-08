@@ -24,6 +24,26 @@ variable "wan_primary_address" {
   }
 }
 
+variable "wan_primary_ipv6_address" {
+  description = "Primary WAN IPv6 address whose prefix contains the dedicated NAT66 /128."
+  type        = string
+
+  validation {
+    condition     = !strcontains(var.wan_primary_ipv6_address, "/") && strcontains(var.wan_primary_ipv6_address, ":") && can(cidrhost("${var.wan_primary_ipv6_address}/128", 0))
+    error_message = "wan_primary_ipv6_address must be an IPv6 address without a prefix."
+  }
+}
+
+variable "wan_primary_ipv6_prefix" {
+  description = "IPv6 prefix length of the primary WAN address."
+  type        = number
+
+  validation {
+    condition     = var.wan_primary_ipv6_prefix == 64
+    error_message = "wan_primary_ipv6_prefix must be 64 for the Hetzner WAN subnet."
+  }
+}
+
 variable "wan_primary_prefix" {
   description = "IPv4 prefix length of the primary WAN address."
   type        = number
@@ -64,6 +84,16 @@ variable "dedicated_egress_address" {
   }
 }
 
+variable "dedicated_egress_ipv6_address" {
+  description = "Dedicated public IPv6 /128 used only as the stateful outbound NAT66 source."
+  type        = string
+
+  validation {
+    condition     = !strcontains(var.dedicated_egress_ipv6_address, "/") && strcontains(var.dedicated_egress_ipv6_address, ":") && can(cidrhost("${var.dedicated_egress_ipv6_address}/128", 0))
+    error_message = "dedicated_egress_ipv6_address must be an IPv6 address without a prefix."
+  }
+}
+
 variable "reserved_addresses" {
   description = "Existing management, primary WAN, public service, and internal service IPv4 addresses that the egress identity must not reuse."
   type        = set(string)
@@ -77,6 +107,20 @@ variable "reserved_addresses" {
       !startswith(address, "127.")
     ])
     error_message = "reserved_addresses must contain IPv4 addresses without prefixes."
+  }
+}
+
+variable "reserved_ipv6_addresses" {
+  description = "Existing primary WAN, public service, internal service, and routed IPv6 addresses that the NAT66 identity must not reuse."
+  type        = set(string)
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for address in var.reserved_ipv6_addresses :
+      !strcontains(address, "/") && strcontains(address, ":") && can(cidrhost("${address}/128", 0))
+    ])
+    error_message = "reserved_ipv6_addresses must contain IPv6 addresses without prefixes."
   }
 }
 
@@ -113,6 +157,32 @@ variable "internal_egress_networks" {
   }
 }
 
+variable "internal_egress_ipv6_networks" {
+  description = "Canonical internal IPv6 CIDRs translated statefully through the dedicated NAT66 address."
+  type        = set(string)
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for subnet in var.internal_egress_ipv6_networks :
+      strcontains(subnet, ":") && can(cidrhost(subnet, 0)) &&
+      try(cidrhost(subnet, 0), "") == try(split("/", subnet)[0], "invalid")
+    ])
+    error_message = "internal_egress_ipv6_networks must contain canonical IPv6 CIDR network addresses."
+  }
+}
+
+variable "internal_egress_ipv6_alias_name" {
+  description = "OPNsense alias name used by the stateful NAT66 rule."
+  type        = string
+  default     = "INTERNAL_EGRESS_V6"
+
+  validation {
+    condition     = can(regex("^[A-Za-z_][A-Za-z0-9_]{0,31}$", var.internal_egress_ipv6_alias_name))
+    error_message = "internal_egress_ipv6_alias_name must be a valid OPNsense alias name up to 32 characters."
+  }
+}
+
 variable "internal_egress_alias_name" {
   description = "OPNsense alias name used by the dedicated outbound NAT rule."
   type        = string
@@ -139,6 +209,27 @@ variable "routed_public_subnets" {
   }
 }
 
+variable "routed_public_ipv6_subnets" {
+  description = "Canonical routed-public IPv6 CIDRs explicitly excluded from stateful NAT66."
+  type        = set(string)
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for subnet in var.routed_public_ipv6_subnets :
+      strcontains(subnet, ":") && can(cidrhost(subnet, 0)) &&
+      try(cidrhost(subnet, 0), "") == try(split("/", subnet)[0], "invalid")
+    ])
+    error_message = "routed_public_ipv6_subnets must contain canonical IPv6 CIDR network addresses."
+  }
+}
+
+variable "no_nat_ipv6_sequence_base" {
+  description = "First outbound NAT sequence allocated to routed-public IPv6 NO-NAT rules."
+  type        = number
+  default     = 905000
+}
+
 variable "no_nat_sequence_base" {
   description = "First outbound NAT sequence allocated to routed-public NO-NAT rules."
   type        = number
@@ -147,6 +238,17 @@ variable "no_nat_sequence_base" {
   validation {
     condition     = var.no_nat_sequence_base == floor(var.no_nat_sequence_base) && var.no_nat_sequence_base >= 1
     error_message = "no_nat_sequence_base must be a positive integer."
+  }
+}
+
+variable "egress_ipv6_nat_sequence" {
+  description = "Outbound NAT sequence for the stateful internal IPv6 translation rule."
+  type        = number
+  default     = 915000
+
+  validation {
+    condition     = var.egress_ipv6_nat_sequence == floor(var.egress_ipv6_nat_sequence) && var.egress_ipv6_nat_sequence >= 1
+    error_message = "egress_ipv6_nat_sequence must be a positive integer."
   }
 }
 

@@ -12,7 +12,9 @@ expression = '''jsonencode({
   routed          = var.routed_public_networks
   services        = var.service_networks
   egress          = var.internal_egress_networks
+  egress_ipv6     = var.internal_egress_ipv6_networks
   routed_public   = [for network in values(var.routed_public_networks) : network.subnet]
+  routed_public_ipv6 = compact([for network in values(var.routed_public_networks) : network.ipv6_subnet])
 })
 '''
 env = os.environ.copy()
@@ -40,15 +42,22 @@ assert payload["wan"] == {
     "vlan_id": 3801,
     "primary_cidr": "138.201.128.112/26",
     "gateway": "138.201.128.65",
+    "primary_ipv6_cidr": "2a01:4f8:172:2bae::112/64",
+    "ipv6_gateway": "fe80::1",
     "public_proxy_address": "138.201.128.87",
+    "public_proxy_ipv6_address": "2a01:4f8:172:2bae::87",
     "public_dns_address": "138.201.128.88",
+    "public_dns_ipv6_address": "2a01:4f8:172:2bae::88",
     "dedicated_egress_address": "138.201.128.95",
+    "dedicated_egress_ipv6_address": "2a01:4f8:172:2bae::95",
 }
 
 routed = payload["routed"]
 assert len(routed) == 1
 assert routed["public_transport"]["vlan_id"] == 3802
 assert routed["public_transport"]["router_address"] == "5.9.227.113"
+assert routed["public_transport"]["ipv6_subnet"] == "2a01:4f8:fff3:107::/64"
+assert routed["public_transport"]["router_ipv6_address"] == "2a01:4f8:fff3:107::113"
 
 services = payload["services"]
 assert set(services) == {"dns", "ntp", "proxy", "nat"}
@@ -59,6 +68,8 @@ assert services["proxy"]["vlan_id"] == 2821 and services["proxy"]["subnet"] == "
 assert services["nat"]["vlan_id"] == 2822 and services["nat"]["subnet"] == "10.16.16.92/30"
 
 assert payload["egress"] == ["10.0.0.0/8"]
+assert payload["egress_ipv6"] == ["2a07:e580:a10::/48"]
 assert payload["routed_public"] == ["5.9.227.112/29"]
+assert payload["routed_public_ipv6"] == ["2a01:4f8:fff3:107::/64"]
 
 print("primary-router-example=ok")

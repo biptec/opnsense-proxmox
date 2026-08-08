@@ -24,7 +24,7 @@ cmd = [
     "-var=proxmox_endpoint=https://127.0.0.1:8006",
     "-var=proxmox_api_token=test@pam!test=test",
     "-var=transfer_tsig_secret=dGVzdC10cmFuc2Zlci1rZXk=",
-    '-var=primary_router={trunk_parent_device="vtnet1",wan_interface="opt1",routed_interfaces={public_transport="opt2"},routed_public_networks={public_transport={vlan_id=3802,subnet="5.9.227.112/29",router_address="5.9.227.113",description="Routed public transport"}},internal_zone_id="77777777-7777-4777-8777-777777777777",public_zone_id="88888888-8888-4888-8888-888888888888",zone_name="biptec.net",trusted_internal_networks=["10.0.0.0/8","2a07:e580:a10::/48"],internal_dns_ipv4="10.16.16.53",public_dns_ipv4="138.201.128.88",dns_active_service="bind"}',
+    '-var=primary_router={trunk_parent_device="vtnet1",wan_interface="opt1",routed_interfaces={public_transport="opt2"},routed_public_networks={public_transport={vlan_id=3802,subnet="5.9.227.112/29",router_address="5.9.227.113",ipv6_subnet="2a01:4f8:fff3:107::/64",router_ipv6_address="2a01:4f8:fff3:107::113",description="Routed public transport"}},internal_zone_id="77777777-7777-4777-8777-777777777777",public_zone_id="88888888-8888-4888-8888-888888888888",zone_name="biptec.net",trusted_internal_networks=["10.0.0.0/8","2a07:e580:a10::/48"],internal_dns_ipv4="10.16.16.53",public_dns_ipv4="138.201.128.88",public_dns_ipv6="2a01:4f8:172:2bae::88",dns_active_service="bind"}',
 ]
 result = subprocess.run(cmd, cwd=root, input=expr, text=True, capture_output=True, check=True)
 payload = json.loads(json.loads(result.stdout.strip()))
@@ -47,9 +47,13 @@ assert {p["from"]: p["table"] for p in network["vlans"]["alcor"]["routing-policy
 assert {p["from"]: p["table"] for p in network["vlans"]["kochab"]["routing-policy"]}[
     "10.16.18.122/32"
 ] == 2820
-assert {p["from"]: p["table"] for p in network["vlans"]["public"]["routing-policy"]}[
-    "5.9.227.114/32"
-] == 3802
+public_policy = {p["from"]: p["table"] for p in network["vlans"]["public"]["routing-policy"]}
+assert public_policy["5.9.227.114/32"] == 3802
+assert public_policy["2a01:4f8:fff3:107::114/128"] == 3802
+assert network["vlans"]["public"]["addresses"] == [
+    "5.9.227.114/29",
+    "2a01:4f8:fff3:107::114/64",
+]
 assert network["vlans"]["alcor"]["nameservers"]["addresses"] == ["10.16.16.53"]
 alcor_routes = {r["to"]: r for r in network["vlans"]["alcor"]["routes"]}
 assert alcor_routes["10.0.0.0/8"]["via"] == "10.16.18.54"
@@ -57,13 +61,14 @@ assert alcor_routes["2a07:e580:a10::/48"]["via"] == "2a07:e580:a10:1234::1"
 
 bind = payload["bind_options"] + "\n" + payload["bind_local"]
 assert 'listen-on port 53 { 10.16.18.53; 5.9.227.114; };' in bind
-assert 'listen-on-v6 port 53 { 2a07:e580:a10:1234::2; };' in bind
+assert 'listen-on-v6 port 53 { 2a07:e580:a10:1234::2; 2a01:4f8:fff3:107::114; };' in bind
 assert 'view "internal"' in bind and 'recursion yes;' in bind
 assert 'transfer-source 10.16.18.53;' in bind
 assert 'primaries { 10.16.16.53 key "secondary-transfer.biptec.net"; };' in bind
 assert 'allow-notify { 10.16.18.54; };' in bind
-assert 'view "public"' in bind and 'match-destinations { 5.9.227.114; };' in bind
+assert 'view "public"' in bind and 'match-destinations { 5.9.227.114; 2a01:4f8:fff3:107::114; };' in bind
 assert 'transfer-source 5.9.227.114;' in bind
+assert 'transfer-source-v6 2a01:4f8:fff3:107::114;' in bind
 assert 'primaries { 138.201.128.88 key "secondary-transfer.biptec.net"; };' in bind
 assert 'allow-notify { 5.9.227.113; };' in bind
 

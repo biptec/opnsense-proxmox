@@ -8,14 +8,16 @@ mock_provider "opnsense" {
 }
 
 variables {
-  wan_interface            = "wan"
-  management_address       = "10.0.0.1"
-  wan_primary_address      = "198.51.100.112"
-  wan_primary_prefix       = 26
-  wan_gateway              = "198.51.100.65"
-  api_extensions_plugin_id = "os-api-extensions"
-  public_dns_address       = "198.51.100.88"
-  public_caddy_address     = "198.51.100.87"
+  wan_interface             = "wan"
+  management_address        = "10.0.0.1"
+  wan_primary_address       = "198.51.100.112"
+  wan_primary_prefix        = 26
+  wan_gateway               = "198.51.100.65"
+  api_extensions_plugin_id  = "os-api-extensions"
+  public_dns_address        = "198.51.100.88"
+  public_dns_ipv6_address   = "2001:db8:ffff::88"
+  public_caddy_address      = "198.51.100.87"
+  public_caddy_ipv6_address = "2001:db8:ffff::87"
 
   service_addresses = {
     dns   = "10.53.0.2"
@@ -47,7 +49,9 @@ run "listener_ownership" {
   assert {
     condition = (
       length(opnsense_interfaces_vip.public_dns) == 0 &&
-      length(opnsense_interfaces_vip.public_caddy) == 0
+      length(opnsense_interfaces_vip.public_dns_ipv6) == 0 &&
+      length(opnsense_interfaces_vip.public_caddy) == 0 &&
+      length(opnsense_interfaces_vip.public_caddy_ipv6) == 0
     )
     error_message = "Public DNS and Caddy VIPs must remain detached by default."
   }
@@ -56,9 +60,9 @@ run "listener_ownership" {
     condition = (
       !opnsense_bind_settings.main.enabled &&
       opnsense_bind_settings.main.port == 53 &&
-      opnsense_bind_settings.main.disable_ipv6 &&
+      !opnsense_bind_settings.main.disable_ipv6 &&
       opnsense_bind_settings.main.listen_ipv4 == toset(["198.51.100.88", "10.53.0.2"]) &&
-      opnsense_bind_settings.main.listen_ipv6 == toset(["::1"])
+      opnsense_bind_settings.main.listen_ipv6 == toset(["::1", "2001:db8:ffff::88"])
     )
     error_message = "BIND must start disabled and own only its public and internal addresses."
   }
@@ -66,7 +70,7 @@ run "listener_ownership" {
   assert {
     condition = (
       !opnsense_caddy_settings.main.enabled &&
-      opnsense_caddy_settings.main.listen_addresses == toset(["198.51.100.87", "10.80.0.2"]) &&
+      opnsense_caddy_settings.main.listen_addresses == toset(["198.51.100.87", "10.80.0.2", "2001:db8:ffff::87"]) &&
       opnsense_caddy_settings.main.http_port == 80 &&
       opnsense_caddy_settings.main.https_port == 443
     )
@@ -111,8 +115,12 @@ run "explicit_public_vips" {
     condition = (
       opnsense_interfaces_vip.public_dns[0].network == "198.51.100.88/32" &&
       !opnsense_interfaces_vip.public_dns[0].no_bind &&
+      opnsense_interfaces_vip.public_dns_ipv6[0].network == "2001:db8:ffff::88/128" &&
+      !opnsense_interfaces_vip.public_dns_ipv6[0].no_bind &&
       opnsense_interfaces_vip.public_caddy[0].network == "198.51.100.87/32" &&
-      !opnsense_interfaces_vip.public_caddy[0].no_bind
+      !opnsense_interfaces_vip.public_caddy[0].no_bind &&
+      opnsense_interfaces_vip.public_caddy_ipv6[0].network == "2001:db8:ffff::87/128" &&
+      !opnsense_interfaces_vip.public_caddy_ipv6[0].no_bind
     )
     error_message = "Explicit public VIP activation must create separate bindable WAN IP Aliases."
   }
@@ -285,8 +293,8 @@ run "dual_stack_internal_listeners" {
   assert {
     condition = (
       !opnsense_bind_settings.main.disable_ipv6 &&
-      opnsense_bind_settings.main.listen_ipv6 == toset(["::1", "2001:db8:53::2"]) &&
-      opnsense_caddy_settings.main.listen_addresses == toset(["198.51.100.87", "10.80.0.2", "2001:db8:80::2"]) &&
+      opnsense_bind_settings.main.listen_ipv6 == toset(["::1", "2001:db8:ffff::88", "2001:db8:53::2"]) &&
+      opnsense_caddy_settings.main.listen_addresses == toset(["198.51.100.87", "10.80.0.2", "2001:db8:ffff::87", "2001:db8:80::2"]) &&
       output.ntp_service_ipv6_address == "2001:db8:123::2"
     )
     error_message = "Dual-stack service data must bind BIND and Caddy to the portable internal IPv6 endpoints while NTP follows its service interface."

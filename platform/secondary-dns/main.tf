@@ -33,9 +33,12 @@ resource "terraform_data" "contract" {
       condition = (
         contains(keys(var.primary_router.routed_interfaces), "public_transport") &&
         contains(keys(var.primary_router.routed_public_networks), "public_transport") &&
-        cidrsubnet(var.public.ipv4_cidr, 0, 0) == local.public_transport.subnet
+        cidrsubnet(var.public.ipv4_cidr, 0, 0) == local.public_transport.subnet &&
+        local.public_transport.ipv6_subnet != null &&
+        local.public_transport.router_ipv6_address != null &&
+        cidrsubnet(var.public.ipv6_cidr, 0, 0) == local.public_transport.ipv6_subnet
       )
-      error_message = "Rigi requires the primary-router public_transport interface/network, and its public IPv4 identity must belong to that exact shared subnet."
+      error_message = "Rigi requires the primary-router public_transport interface/network, and both public identities must belong to the exact shared IPv4/IPv6 subnets."
     }
 
 
@@ -48,6 +51,7 @@ resource "terraform_data" "contract" {
         cidrcontains(var.ntp_internal.ipv4_cidr, var.ntp_internal.ipv4_gateway),
         cidrcontains(var.ntp_internal.ipv6_cidr, var.ntp_internal.ipv6_gateway),
         cidrcontains(var.public.ipv4_cidr, local.public_transport.router_address),
+        try(cidrcontains(var.public.ipv6_cidr, local.public_transport.router_ipv6_address), false),
       ])
       error_message = "Every Rigi gateway must be on-link for its configured service identity."
     }

@@ -24,6 +24,7 @@ alcor.2804     10.16.18.53/30                    DNS2 internal
 kochab.2820    10.16.18.122/30                   NTP2 internal
                2a07:e580:a10:1278::2/64
 public.3802    5.9.227.114/29                    DNS2 public only
+               2a01:4f8:fff3:107::114/64
 ```
 
 Netplan installs source-policy tables for every L3 identity. Replies sourced from each service identity therefore return through the matching Etna gateway. The main Internet default uses routed-public VLAN `3802`; internal destinations have an explicit main-table route through Alcor.
@@ -33,7 +34,7 @@ Netplan installs source-policy tables for every L3 identity. Replies sourced fro
 BIND uses two destination-aware views of the same zone:
 
 - `internal` listens on Alcor, receives the internal `biptec.net` secondary zone from Etna's internal DNS endpoint, and by default provides recursion only to trusted internal networks;
-- `public` listens only on `5.9.227.114`, receives the public secondary zone from `138.201.128.88`, and never enables recursion.
+- `public` listens on `5.9.227.114` and `2a01:4f8:fff3:107::114`, receives the public secondary zone from DNS1, and never enables recursion.
 
 Each view sets an explicit `transfer-source`, so AXFR/IXFR refreshes use the same stable Rigi identity that clients use. Transfers and NOTIFY are authenticated with one dedicated TSIG key. This state owns the matching TSIG key and additive transfer attachments on both existing primary zones; deleting this state clears only those attachments and does not delete either primary zone.
 
@@ -50,10 +51,10 @@ nftables defaults input and forwarding to drop. It permits only:
 - management SSH from trusted internal networks;
 - internal DNS TCP/UDP 53 on Alcor;
 - internal NTP UDP 123 on Kochab;
-- public DNS TCP/UDP 53 on `5.9.227.114`;
+- public DNS TCP/UDP 53 on `5.9.227.114` and `2a01:4f8:fff3:107::114`;
 - ICMP/ICMPv6 and established traffic.
 
-Output is allowed so the secondary can fetch packages, synchronize time, resolve recursively for internal clients, and transfer zones. The same state creates the required Etna firewall rules. Trusted-client service rules apply on every Etna ingress interface except WAN, so they do not need to know which current or future internal VLAN delivered the packet.
+Output is allowed so the secondary can fetch packages, synchronize time, resolve recursively for internal clients, and transfer zones. Internal Rigi IPv6 egress uses Etna's stateful NAT66 policy, while `2a01:4f8:fff3:107::/64` remains routed end-to-end without NAT. The same state creates the required Etna firewall rules. Trusted-client service rules apply on every Etna ingress interface except WAN, so they do not need to know which current or future internal VLAN delivered the packet.
 
 ## Immutable lifecycle
 
@@ -65,7 +66,7 @@ This is intentional for a secondary service: Etna remains authoritative and prov
 
 `transfer_tsig_secret` and the optional SSH public key are never committed. The TSIG secret is necessarily present in the protected Terraform state and in the Terraform-managed cloud-init snippet. Protect the backend and Proxmox snippet datastore accordingly.
 
-Copy `terraform.tfvars.example` to a gitignored file and supply the Proxmox token and transfer secret separately. Replace only the `vm_datastore` placeholder with the same datastore used by the current test environment.
+Copy `terraform.tfvars.example` to a gitignored file and supply the Proxmox token and transfer secret separately. The example already uses the approved `local-vmdata01` datastore.
 
 ## Destroy semantics
 

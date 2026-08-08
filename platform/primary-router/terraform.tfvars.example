@@ -12,19 +12,26 @@ webgui_certificate_ref = null
 
 wan = {
   vlan_id                  = 3801
-  primary_cidr             = "138.201.128.112/26"
-  gateway                  = "138.201.128.65"
-  public_proxy_address     = "138.201.128.87"
-  public_dns_address       = "138.201.128.88"
-  dedicated_egress_address = "138.201.128.95"
+  primary_cidr                  = "138.201.128.112/26"
+  gateway                       = "138.201.128.65"
+  primary_ipv6_cidr             = "2a01:4f8:172:2bae::112/64"
+  ipv6_gateway                  = "fe80::1"
+  public_proxy_address          = "138.201.128.87"
+  public_proxy_ipv6_address     = "2a01:4f8:172:2bae::87"
+  public_dns_address            = "138.201.128.88"
+  public_dns_ipv6_address       = "2a01:4f8:172:2bae::88"
+  dedicated_egress_address      = "138.201.128.95"
+  dedicated_egress_ipv6_address = "2a01:4f8:172:2bae::95"
 }
 
 routed_public_networks = {
   public_transport = {
     vlan_id        = 3802
     subnet         = "5.9.227.112/29"
-    router_address = "5.9.227.113"
-    description    = "Routed public transport"
+    router_address      = "5.9.227.113"
+    ipv6_subnet         = "2a01:4f8:fff3:107::/64"
+    router_ipv6_address = "2a01:4f8:fff3:107::113"
+    description         = "Routed public transport"
   }
 }
 
@@ -60,7 +67,8 @@ trusted_internal_networks = [
   "2a07:e580:a10::/48",
 ]
 
-internal_egress_networks = ["10.0.0.0/8"]
+internal_egress_networks      = ["10.0.0.0/8"]
+internal_egress_ipv6_networks = ["2a07:e580:a10::/48"]
 
 # Activation stays false until the explicit DNS/firewall/egress cutover stage.
 cutover = {}

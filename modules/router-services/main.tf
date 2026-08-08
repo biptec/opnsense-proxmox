@@ -12,12 +12,14 @@ locals {
   ]
   bind_listener_ipv6 = compact([
     "::1",
+    var.public_dns_ipv6_address,
     local.internal_dns_ipv6,
   ])
   caddy_listener_addresses = concat([
     var.public_caddy_address,
     local.internal_caddy_address,
     ], compact([
+      var.public_caddy_ipv6_address,
       local.internal_caddy_ipv6,
   ]))
   all_listener_addresses = concat(
@@ -32,7 +34,9 @@ locals {
 resource "terraform_data" "listener_contract" {
   input = {
     public_dns               = var.public_dns_address
+    public_dns_ipv6          = var.public_dns_ipv6_address
     public_caddy             = var.public_caddy_address
+    public_caddy_ipv6        = var.public_caddy_ipv6_address
     service                  = var.service_addresses
     ntp_interface            = try(var.service_interfaces["ntp"], "")
     api_extensions_plugin_id = var.api_extensions_plugin_id
@@ -70,6 +74,11 @@ resource "terraform_data" "listener_contract" {
     precondition {
       condition     = length(toset(local.all_listener_addresses)) == length(local.all_listener_addresses)
       error_message = "Public and internal DNS, NTP, and Caddy listener addresses must all be distinct."
+    }
+
+    precondition {
+      condition     = var.public_dns_ipv6_address != var.public_caddy_ipv6_address
+      error_message = "Public DNS and Caddy IPv6 identities must be distinct."
     }
 
     precondition {
@@ -116,6 +125,22 @@ resource "opnsense_interfaces_vip" "public_dns" {
   ]
 }
 
+resource "opnsense_interfaces_vip" "public_dns_ipv6" {
+  count = var.public_dns_vip_enabled ? 1 : 0
+
+  mode        = "ipalias"
+  interface   = var.wan_interface
+  network     = "${var.public_dns_ipv6_address}/128"
+  no_bind     = false
+  no_expand   = false
+  description = "Public DNS IPv6 service address"
+
+  depends_on = [
+    terraform_data.listener_contract,
+    opnsense_ntp_settings.internal,
+  ]
+}
+
 resource "opnsense_interfaces_vip" "public_caddy" {
   count = var.public_caddy_vip_enabled ? 1 : 0
 
@@ -132,9 +157,25 @@ resource "opnsense_interfaces_vip" "public_caddy" {
   ]
 }
 
+resource "opnsense_interfaces_vip" "public_caddy_ipv6" {
+  count = var.public_caddy_vip_enabled ? 1 : 0
+
+  mode        = "ipalias"
+  interface   = var.wan_interface
+  network     = "${var.public_caddy_ipv6_address}/128"
+  no_bind     = false
+  no_expand   = false
+  description = "Public Caddy IPv6 service address"
+
+  depends_on = [
+    terraform_data.listener_contract,
+    opnsense_ntp_settings.internal,
+  ]
+}
+
 resource "opnsense_bind_settings" "main" {
   enabled              = var.bind_enabled
-  disable_ipv6         = local.internal_dns_ipv6 == ""
+  disable_ipv6         = length(local.bind_listener_ipv6) == 1
   listen_ipv4          = local.bind_listener_addresses
   listen_ipv6          = local.bind_listener_ipv6
   port                 = 53
@@ -147,6 +188,7 @@ resource "opnsense_bind_settings" "main" {
   depends_on = [
     opnsense_plugin.bind,
     opnsense_interfaces_vip.public_dns,
+    opnsense_interfaces_vip.public_dns_ipv6,
   ]
 }
 
@@ -180,5 +222,6 @@ resource "opnsense_caddy_settings" "main" {
   depends_on = [
     opnsense_plugin.caddy,
     opnsense_interfaces_vip.public_caddy,
+    opnsense_interfaces_vip.public_caddy_ipv6,
   ]
 }
