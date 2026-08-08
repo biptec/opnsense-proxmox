@@ -1,4 +1,38 @@
 locals {
+  management_ssh_ipv4 = split("/", var.management_ssh_ipv4_cidr)[0]
+  management_web_ipv4 = split("/", var.management_web_ipv4_cidr)[0]
+  wan_primary_address = split("/", var.wan.primary_cidr)[0]
+  wan_primary_prefix  = tonumber(split("/", var.wan.primary_cidr)[1])
+
+  routed_public_subnets = toset([
+    for network in values(var.routed_public_networks) : network.subnet
+  ])
+
+  foundation_service_networks = {
+    for name, network in var.service_networks : name => {
+      vlan_id           = network.vlan_id
+      subnet            = network.subnet
+      service_ipv4_host = network.service_ipv4_address == cidrhost(network.subnet, 1) ? 1 : 2
+      ipv6_subnet       = network.ipv6_subnet
+      hosted_on_router  = network.hosted_on_router
+    }
+  }
+
+  router_services_ipv4 = {
+    dns   = module.router_foundation.service_addresses["dns"]
+    ntp   = module.router_foundation.service_addresses["ntp"]
+    caddy = module.router_foundation.service_addresses["proxy"]
+  }
+  router_services_ipv6 = length(module.router_foundation.service_ipv6_addresses) == 0 ? {} : {
+    dns   = module.router_foundation.service_ipv6_addresses["dns"]
+    ntp   = module.router_foundation.service_ipv6_addresses["ntp"]
+    caddy = module.router_foundation.service_ipv6_addresses["proxy"]
+  }
+  router_services_interfaces = {
+    for name, interface in module.router_foundation.service_interfaces :
+    (name == "proxy" ? "caddy" : name) => interface
+  }
+
   management_vips = merge(
     {
       web_ipv4 = {
@@ -20,7 +54,7 @@ locals {
     },
   )
 
-  routed_vlan_ids  = [for network in values(var.routed_networks) : network.vlan_id]
+  routed_vlan_ids  = [for network in values(var.routed_public_networks) : network.vlan_id]
   service_vlan_ids = [for network in values(var.service_networks) : network.vlan_id]
   all_vlan_ids     = concat([var.wan.vlan_id], local.routed_vlan_ids, local.service_vlan_ids)
 
@@ -28,14 +62,14 @@ locals {
 
   reserved_ipv4_addresses = toset(concat(
     [
-      var.management_ipv4_address,
-      split("/", var.management_web_ipv4_cidr)[0],
-      var.wan.primary_address,
+      local.management_ssh_ipv4,
+      local.management_web_ipv4,
+      local.wan_primary_address,
       var.wan.public_dns_address,
-      var.wan.public_caddy_address,
+      var.wan.public_proxy_address,
     ],
     values(module.router_foundation.service_addresses),
-    [for network in values(var.routed_networks) : network.router_address],
+    [for network in values(var.routed_public_networks) : network.router_address],
   ))
 }
 
@@ -46,10 +80,10 @@ data "external" "current_webgui" {
 
 resource "terraform_data" "platform_contract" {
   input = {
-    management_vips  = local.management_vips
-    wan              = var.wan
-    routed_networks  = var.routed_networks
-    service_networks = var.service_networks
+    management_vips        = local.management_vips
+    wan                    = var.wan
+    routed_public_networks = var.routed_public_networks
+    service_networks       = local.foundation_service_networks
   }
 
   lifecycle {
@@ -60,17 +94,17 @@ resource "terraform_data" "platform_contract" {
 
     precondition {
       condition = (
-        cidrcontains("${var.wan.primary_address}/${var.wan.primary_prefix}", var.wan.gateway) &&
-        cidrcontains("${var.wan.primary_address}/${var.wan.primary_prefix}", var.wan.public_dns_address) &&
-        cidrcontains("${var.wan.primary_address}/${var.wan.primary_prefix}", var.wan.public_caddy_address) &&
-        cidrcontains("${var.wan.primary_address}/${var.wan.primary_prefix}", var.wan.dedicated_egress_address)
+        cidrcontains(var.wan.primary_cidr, var.wan.gateway) &&
+        cidrcontains(var.wan.primary_cidr, var.wan.public_dns_address) &&
+        cidrcontains(var.wan.primary_cidr, var.wan.public_proxy_address) &&
+        cidrcontains(var.wan.primary_cidr, var.wan.dedicated_egress_address)
       )
       error_message = "WAN gateway and all /32 service identities must belong to the connected primary WAN prefix."
     }
 
     precondition {
       condition = alltrue([
-        for network in values(var.routed_networks) :
+        for network in values(var.routed_public_networks) :
         can(cidrhost(network.subnet, 0)) &&
         try(cidrhost(network.subnet, 0), "") == try(split("/", network.subnet)[0], "invalid") &&
         cidrcontains(network.subnet, network.router_address)
@@ -80,7 +114,7 @@ resource "terraform_data" "platform_contract" {
 
     precondition {
       condition = alltrue([
-        for network in values(var.routed_networks) :
+        for network in values(var.routed_public_networks) :
         (network.ipv6_subnet == null && network.router_ipv6_address == null) ||
         (
           network.ipv6_subnet != null && network.router_ipv6_address != null &&
@@ -98,8 +132,8 @@ resource "terraform_data" "platform_contract" {
     }
 
     precondition {
-      condition     = !var.cutover.caddy_enabled || var.cutover.public_caddy_vip
-      error_message = "Caddy cannot be enabled until its public VIP is attached."
+      condition     = !var.cutover.proxy_enabled || var.cutover.public_proxy_vip
+      error_message = "The reverse proxy cannot be enabled until its public VIP is attached."
     }
 
     precondition {
@@ -154,8 +188,8 @@ resource "opnsense_interfaces_assignment" "wan" {
 
   ipv4 = {
     mode    = "static"
-    address = var.wan.primary_address
-    prefix  = var.wan.primary_prefix
+    address = local.wan_primary_address
+    prefix  = local.wan_primary_prefix
   }
 
   ipv6 = {
@@ -174,7 +208,7 @@ resource "opnsense_routing_gateway" "wan" {
 }
 
 resource "opnsense_interfaces_vlan" "routed" {
-  for_each = var.routed_networks
+  for_each = var.routed_public_networks
 
   parent      = var.trunk_parent_device
   tag         = each.value.vlan_id
@@ -187,7 +221,7 @@ resource "opnsense_interfaces_vlan" "routed" {
 }
 
 resource "opnsense_interfaces_assignment" "routed" {
-  for_each = var.routed_networks
+  for_each = var.routed_public_networks
 
   device            = opnsense_interfaces_vlan.routed[each.key].device
   description       = each.value.description
@@ -215,7 +249,7 @@ module "router_foundation" {
   source = "../../modules/router-foundation"
 
   management_interface       = var.management_interface
-  management_address         = var.management_ipv4_address
+  management_address         = local.management_ssh_ipv4
   trunk_parent_device        = var.trunk_parent_device
   reserved_vlan_ids          = toset(concat([var.wan.vlan_id], local.routed_vlan_ids))
   allow_management_readdress = var.allow_management_readdress
@@ -236,7 +270,7 @@ module "router_foundation" {
     permit_root_login       = false
   }
 
-  service_networks = var.service_networks
+  service_networks = local.foundation_service_networks
 
   depends_on = [opnsense_interfaces_vip.management]
 }
@@ -246,19 +280,19 @@ module "router_services" {
 
   wan_interface            = opnsense_interfaces_assignment.wan.name
   management_address       = module.router_foundation.management_address
-  wan_primary_address      = var.wan.primary_address
-  wan_primary_prefix       = var.wan.primary_prefix
+  wan_primary_address      = local.wan_primary_address
+  wan_primary_prefix       = local.wan_primary_prefix
   wan_gateway              = var.wan.gateway
   api_extensions_plugin_id = module.router_foundation.api_extensions_plugin_id
   public_dns_address       = var.wan.public_dns_address
   public_dns_vip_enabled   = var.cutover.public_dns_vip
-  public_caddy_address     = var.wan.public_caddy_address
-  public_caddy_vip_enabled = var.cutover.public_caddy_vip
-  service_addresses        = module.router_foundation.service_addresses
-  service_ipv6_addresses   = module.router_foundation.service_ipv6_addresses
-  service_interfaces       = module.router_foundation.service_interfaces
+  public_caddy_address     = var.wan.public_proxy_address
+  public_caddy_vip_enabled = var.cutover.public_proxy_vip
+  service_addresses        = local.router_services_ipv4
+  service_ipv6_addresses   = local.router_services_ipv6
+  service_interfaces       = local.router_services_interfaces
   bind_enabled             = null
-  caddy_enabled            = var.cutover.caddy_enabled
+  caddy_enabled            = var.cutover.proxy_enabled
   ntp_enabled              = true
   ntp_serve_clients        = var.cutover.ntp_serving
   ntp_servers              = var.ntp_servers
@@ -268,8 +302,8 @@ module "router_egress" {
   source = "../../modules/router-egress"
 
   wan_interface             = opnsense_interfaces_assignment.wan.name
-  wan_primary_address       = var.wan.primary_address
-  wan_primary_prefix        = var.wan.primary_prefix
+  wan_primary_address       = local.wan_primary_address
+  wan_primary_prefix        = local.wan_primary_prefix
   wan_gateway               = var.wan.gateway
   dedicated_egress_address  = var.wan.dedicated_egress_address
   reserved_addresses        = local.reserved_ipv4_addresses
@@ -277,5 +311,5 @@ module "router_egress" {
   public_egress_vip_enabled = var.cutover.egress_vip
   outbound_nat_enabled      = var.cutover.outbound_nat
   internal_egress_networks  = var.internal_egress_networks
-  routed_public_subnets     = var.routed_public_subnets
+  routed_public_subnets     = local.routed_public_subnets
 }

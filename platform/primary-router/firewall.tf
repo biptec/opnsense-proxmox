@@ -1,5 +1,4 @@
 locals {
-  management_web_ipv4 = split("/", var.management_web_ipv4_cidr)[0]
   management_ssh_ipv6 = var.management_ssh_ipv6_cidr == null ? null : split("/", var.management_ssh_ipv6_cidr)[0]
   management_web_ipv6 = var.management_web_ipv6_cidr == null ? null : split("/", var.management_web_ipv6_cidr)[0]
 
@@ -27,7 +26,7 @@ locals {
       action           = "pass"
       protocol         = "TCP"
       source           = opnsense_firewall_alias.internal_ipv4.name
-      destination      = var.management_ipv4_address
+      destination      = local.management_ssh_ipv4
       port             = "22"
       description      = "Management SSH endpoint"
     }
@@ -51,7 +50,7 @@ locals {
       action           = "block"
       protocol         = "TCP"
       source           = "any"
-      destination      = var.management_ipv4_address
+      destination      = local.management_ssh_ipv4
       port             = "443"
       description      = "Block WebGUI and API on SSH identity"
     }
@@ -91,29 +90,29 @@ locals {
       port             = "53"
       description      = "Internal DNS UDP"
     }
-    internal_caddy_http = {
-      enabled          = var.cutover.caddy_enabled
+    internal_proxy_http = {
+      enabled          = var.cutover.proxy_enabled
       sequence         = 110
       interfaces       = local.internal_service_ingress_interfaces
       interface_invert = true
       action           = "pass"
       protocol         = "TCP"
       source           = opnsense_firewall_alias.internal_ipv4.name
-      destination      = local.internal_caddy_ipv4
+      destination      = local.internal_proxy_ipv4
       port             = "80"
-      description      = "Internal Caddy HTTP"
+      description      = "Internal reverse proxy HTTP"
     }
-    internal_caddy_https = {
-      enabled          = var.cutover.caddy_enabled
+    internal_proxy_https = {
+      enabled          = var.cutover.proxy_enabled
       sequence         = 111
       interfaces       = local.internal_service_ingress_interfaces
       interface_invert = true
       action           = "pass"
       protocol         = "TCP"
       source           = opnsense_firewall_alias.internal_ipv4.name
-      destination      = local.internal_caddy_ipv4
+      destination      = local.internal_proxy_ipv4
       port             = "443"
-      description      = "Internal Caddy HTTPS"
+      description      = "Internal reverse proxy HTTPS"
     }
     internal_ntp = {
       enabled          = var.cutover.ntp_serving
@@ -149,27 +148,27 @@ locals {
       port        = "53"
       description = "Public authoritative DNS UDP"
     }
-    public_caddy_http = {
-      enabled     = var.cutover.caddy_enabled
+    public_proxy_http = {
+      enabled     = var.cutover.proxy_enabled
       sequence    = 210
       interfaces  = [opnsense_interfaces_assignment.wan.name]
       action      = "pass"
       protocol    = "TCP"
       source      = "any"
-      destination = var.wan.public_caddy_address
+      destination = var.wan.public_proxy_address
       port        = "80"
-      description = "Public Caddy HTTP"
+      description = "Public reverse proxy HTTP"
     }
-    public_caddy_https = {
-      enabled     = var.cutover.caddy_enabled
+    public_proxy_https = {
+      enabled     = var.cutover.proxy_enabled
       sequence    = 211
       interfaces  = [opnsense_interfaces_assignment.wan.name]
       action      = "pass"
       protocol    = "TCP"
       source      = "any"
-      destination = var.wan.public_caddy_address
+      destination = var.wan.public_proxy_address
       port        = "443"
-      description = "Public Caddy HTTPS"
+      description = "Public reverse proxy HTTPS"
     }
   }
 
@@ -256,30 +255,30 @@ locals {
         description      = "Internal DNS UDP IPv6"
       }
     },
-    local.internal_caddy_ipv6 == null ? {} : {
-      internal_caddy_http_ipv6 = {
-        enabled          = var.cutover.caddy_enabled
+    local.internal_proxy_ipv6 == null ? {} : {
+      internal_proxy_http_ipv6 = {
+        enabled          = var.cutover.proxy_enabled
         sequence         = 140
         interfaces       = local.internal_service_ingress_interfaces
         interface_invert = true
         action           = "pass"
         protocol         = "TCP"
         source           = opnsense_firewall_alias.internal_ipv6.name
-        destination      = local.internal_caddy_ipv6
+        destination      = local.internal_proxy_ipv6
         port             = "80"
-        description      = "Internal Caddy HTTP IPv6"
+        description      = "Internal reverse proxy HTTP IPv6"
       }
-      internal_caddy_https_ipv6 = {
-        enabled          = var.cutover.caddy_enabled
+      internal_proxy_https_ipv6 = {
+        enabled          = var.cutover.proxy_enabled
         sequence         = 141
         interfaces       = local.internal_service_ingress_interfaces
         interface_invert = true
         action           = "pass"
         protocol         = "TCP"
         source           = opnsense_firewall_alias.internal_ipv6.name
-        destination      = local.internal_caddy_ipv6
+        destination      = local.internal_proxy_ipv6
         port             = "443"
-        description      = "Internal Caddy HTTPS IPv6"
+        description      = "Internal reverse proxy HTTPS IPv6"
       }
     },
     local.internal_ntp_ipv6 == null ? {} : {

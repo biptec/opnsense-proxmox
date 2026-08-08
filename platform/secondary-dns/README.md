@@ -2,13 +2,13 @@
 
 This root owns the complete Rigi lifecycle: the VM itself **and every Rigi-specific integration resource on Etna**. Rigi is an immutable Ubuntu 24.04 LTS VM created by Terraform; cloud-init configures networking, BIND, Chrony, nftables, SSH hardening, and QEMU Guest Agent. No Ansible, Salt, Terraform remote-exec, or post-bootstrap SSH configuration is used.
 
-The primary-router state knows nothing about Rigi. This state consumes only shared primary outputs and creates VLAN `508`, VLAN `2804`, VLAN `2820`, their Etna gateway assignments, Rigi firewall policy, NS2 records, TSIG, and transfer attachments. Shared WAN and VLAN `3802` remain owned by the primary state and are never deleted here.
+The primary-router state knows nothing about Rigi. This state consumes only shared primary outputs and creates VLAN `508`, VLAN `2804`, VLAN `2820`, their Etna gateway assignments, Rigi firewall policy, NS2 records, TSIG, and transfer attachments. Shared WAN and VLAN `3802` remain owned by the primary state and are never deleted here; VLAN ID, subnet, gateway, and logical OPNsense interface are consumed from the primary contract rather than duplicated.
 
-Populate `primary_router` from the primary state outputs: `trunk_parent_device`, `wan_interface`, `routed_interfaces["transport_public_routed"]`, `dns_internal_zone_id`, `dns_public_zone_id`, `dns_zone_name`, `trusted_internal_networks`, `internal_dns_address`, `public_dns_address`, and `dns_active_service`. These are references only; do not import the referenced primary resources into this state. The secondary plan is rejected unless `dns_active_service` is `bind`, so NS2 cannot be published before the primary DNS cutover is complete.
+Do not copy primary-router identifiers into this configuration by hand. After the primary state is applied, generate a gitignored `primary-router.auto.tfvars.json` from its single `downstream_router_contract` output as shown in `terraform.tfvars.example`. That contract includes dynamic OPNsense logical interface names/zone UUIDs plus the shared routed-public transport metadata. These are references only; do not import the referenced primary resources into this state. The secondary plan is rejected unless `dns_active_service` is `bind`, so NS2 cannot be published before the primary DNS cutover is complete.
 
 ## Proxmox topology
 
-Rigi uses `vmbr1` for both NICs:
+Rigi uses `vmbr1` for both NICs. Its VM disk is stored on `local-vmdata01`:
 
 - NIC0 is configured by Proxmox as access VLAN `508`, so Rigi receives management untagged;
 - NIC1 is an explicit trunk containing only VLANs `2804`, `2820`, and `3802`.

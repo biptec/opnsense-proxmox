@@ -1,6 +1,6 @@
 # Primary router platform root
 
-This root composes the shared Etna router state. It owns shared L3 transport and router-hosted services, not site-specific DNS records, Caddy domains, handlers, or backend policy.
+This root composes the shared Etna router state. It owns shared L3 transport and router-hosted services, not site-specific DNS records, reverse-proxy domains, handlers, or backend policy.
 
 ## Proxmox prerequisites
 
@@ -14,7 +14,16 @@ The Proxmox host remains a separate, persistent management domain:
 
 Do not move the live Proxmox WAN address/gateway during a test apply. The host-side cutover is a separate reviewed operation.
 
-`tofu/etna.tfvars.example` contains only the Etna VM networking overlay. Existing test-node, storage, and image values remain unchanged.
+`vm-bootstrap.tfvars.example` is the Etna-owned overlay for the generic `../../tofu` VM root. It now carries the known Etna node/storage/network values, including `local-vmdata01`.
+
+The VM bootstrap and router configuration intentionally use two Terraform states, but they are one Etna ownership domain. The split is a bootstrap dependency, not an architectural ownership split: the OPNsense provider cannot read/import/configure Etna until the VM exists, boots, and exposes its API. Keep both Etna value files in this directory; apply the VM bootstrap state first, then the primary-router state. Destroy in reverse order.
+
+Copy `vm-bootstrap.tfvars.example` to the gitignored `vm-bootstrap.tfvars`, add the normal secret/image inputs outside Git, then run the generic VM root with that Etna overlay:
+
+```sh
+cp vm-bootstrap.tfvars.example vm-bootstrap.tfvars
+tofu -chdir=../../tofu apply -var-file=../platform/primary-router/vm-bootstrap.tfvars
+```
 
 ## Bootstrap
 
@@ -44,8 +53,8 @@ This state owns only Etna and shared transport:
 - VLAN `3801` WAN and its default gateway;
 - VLAN `3802` routed public transport;
 - Etna management IP aliases;
-- portable DNS1, NTP1, Caddy, and Source NAT `/30` loopbacks and reserved VLAN identities;
-- BIND/Caddy base settings and NTP1 service binding;
+- portable DNS1, NTP1, reverse-proxy, and Source NAT `/30` loopbacks and reserved VLAN identities;
+- BIND/reverse-proxy base settings and NTP1 service binding;
 - dedicated outbound-NAT identity and shared NO-NAT policy when explicitly activated.
 
 It does **not** pre-create downstream host/service VLANs, routes, firewall rules, secondary DNS configuration, or application-specific resources. Each downstream Terraform state owns both its workload and every additive Etna resource required by that workload. Destroying that state therefore removes its router integration as well.
@@ -56,7 +65,7 @@ The primary state must outlive every downstream state. Destroy downstream worklo
 
 ## Safe first apply
 
-All cutover flags default to false. The initial platform apply therefore does not attach the public DNS/Caddy/SNAT VIPs and does not enable Caddy or client-facing NTP service. DNS service ownership and ingress firewall cutover are added in the next platform stage.
+All cutover flags default to false. The initial platform apply therefore does not attach the public DNS/proxy/SNAT VIPs and does not enable the reverse proxy or client-facing NTP service. DNS service ownership and ingress firewall cutover are added in the next platform stage.
 
 The first ownership apply intentionally changes the imported WebGUI/SSH listener configuration, so run it once with `allow_management_readdress = true`. Use `-parallelism=1`: OPNsense serializes configd writes and a parallel first apply can create a long lock queue. After that apply succeeds, immediately apply the same safe configuration again with the default `allow_management_readdress = false` to relock the guard. Subsequent plans should keep the guard false unless a reviewed management readdress is intentional.
 
@@ -86,7 +95,7 @@ The dependency graph attaches the VIP, runs the guarded DNS cutover, verifies BI
 
 Internal DNS recursion is allowed only for `trusted_internal_networks` and only on the internal DNS destination. The public view matches the public DNS destination, permits authoritative queries, and has recursion disabled.
 
-NTP has no WAN rule. Internal UDP/123 opens only when `ntp_serving = true`. Public Caddy TCP/80 and TCP/443 opens only when Caddy and its public VIP are explicitly activated. Primary-owned internal service and management rules apply on every Etna ingress interface except WAN, constrained by their source/destination identities; this lets future downstream states reach primary services without the primary state enumerating their interfaces. The outbound NAT mode is always owned by this state: `automatic` while egress is safe/detached and `hybrid` while explicit NO-NAT/SNAT rules are active. Downstream states own the firewall pass rules that permit their workloads to use that shared egress policy.
+NTP has no WAN rule. Internal UDP/123 opens only when `ntp_serving = true`. Public reverse-proxy TCP/80 and TCP/443 opens only when the proxy service and its public VIP are explicitly activated. Primary-owned internal service and management rules apply on every Etna ingress interface except WAN, constrained by their source/destination identities; this lets future downstream states reach primary services without the primary state enumerating their interfaces. The outbound NAT mode is always owned by this state: `automatic` while egress is safe/detached and `hybrid` while explicit NO-NAT/SNAT rules are active. Downstream states own the firewall pass rules that permit their workloads to use that shared egress policy.
 
 ## Management endpoint cutover
 

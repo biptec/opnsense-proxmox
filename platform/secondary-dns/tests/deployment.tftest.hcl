@@ -66,15 +66,21 @@ variables {
   }
 
   public = {
-    vlan_id      = 3802
-    ipv4_cidr    = "5.9.227.114/29"
-    ipv4_gateway = "5.9.227.113"
+    ipv4_cidr = "5.9.227.114/29"
   }
 
   primary_router = {
-    trunk_parent_device       = "vtnet1"
-    wan_interface             = "opt1"
-    public_interface          = "opt2"
+    trunk_parent_device = "vtnet1"
+    wan_interface       = "opt1"
+    routed_interfaces   = { public_transport = "opt2" }
+    routed_public_networks = {
+      public_transport = {
+        vlan_id        = 3802
+        subnet         = "5.9.227.112/29"
+        router_address = "5.9.227.113"
+        description    = "Routed public transport"
+      }
+    }
     internal_zone_id          = "77777777-7777-4777-8777-777777777777"
     public_zone_id            = "88888888-8888-4888-8888-888888888888"
     zone_name                 = "biptec.net"
@@ -170,9 +176,17 @@ run "reject_secondary_before_primary_bind_cutover" {
 
   variables {
     primary_router = {
-      trunk_parent_device       = "vtnet1"
-      wan_interface             = "opt1"
-      public_interface          = "opt2"
+      trunk_parent_device = "vtnet1"
+      wan_interface       = "opt1"
+      routed_interfaces   = { public_transport = "opt2" }
+      routed_public_networks = {
+        public_transport = {
+          vlan_id        = 3802
+          subnet         = "5.9.227.112/29"
+          router_address = "5.9.227.113"
+          description    = "Routed public transport"
+        }
+      }
       internal_zone_id          = "77777777-7777-4777-8777-777777777777"
       public_zone_id            = "88888888-8888-4888-8888-888888888888"
       zone_name                 = "biptec.net"
@@ -202,14 +216,12 @@ run "reject_duplicate_rigi_vlan" {
   expect_failures = [terraform_data.contract]
 }
 
-run "reject_offlink_public_gateway" {
+run "reject_public_identity_outside_shared_transport" {
   command = plan
 
   variables {
     public = {
-      vlan_id      = 3802
-      ipv4_cidr    = "5.9.227.114/29"
-      ipv4_gateway = "5.9.227.121"
+      ipv4_cidr = "5.9.227.122/29"
     }
   }
 

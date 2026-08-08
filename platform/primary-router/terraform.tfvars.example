@@ -1,9 +1,9 @@
-management_interface      = "lan"
-management_ipv4_address    = "10.16.214.2"
-management_web_ipv4_cidr   = "10.16.214.6/30"
-management_ssh_ipv6_cidr   = "2a07:e580:a10:d600::2/64"
-management_web_ipv6_cidr   = "2a07:e580:a10:d604::2/64"
-trunk_parent_device        = "vtnet1"
+management_interface     = "lan"
+management_ssh_ipv4_cidr = "10.16.214.2/30"
+management_web_ipv4_cidr = "10.16.214.6/30"
+management_ssh_ipv6_cidr = "2a07:e580:a10:d600::2/64"
+management_web_ipv6_cidr = "2a07:e580:a10:d604::2/64"
+trunk_parent_device      = "vtnet1"
 
 # Null means: preserve the certificate already used by WebGUI. The helper reads
 # its reference through os-api-extensions using the same OPNSENSE_* environment
@@ -11,17 +11,16 @@ trunk_parent_device        = "vtnet1"
 webgui_certificate_ref = null
 
 wan = {
-  vlan_id                   = 3801
-  primary_address           = "138.201.128.112"
-  primary_prefix            = 26
-  gateway                   = "138.201.128.65"
-  public_caddy_address      = "138.201.128.87"
-  public_dns_address        = "138.201.128.88"
-  dedicated_egress_address  = "138.201.128.95"
+  vlan_id                  = 3801
+  primary_cidr             = "138.201.128.112/26"
+  gateway                  = "138.201.128.65"
+  public_proxy_address     = "138.201.128.87"
+  public_dns_address       = "138.201.128.88"
+  dedicated_egress_address = "138.201.128.95"
 }
 
-routed_networks = {
-  transport_public_routed = {
+routed_public_networks = {
+  public_transport = {
     vlan_id        = 3802
     subnet         = "5.9.227.112/29"
     router_address = "5.9.227.113"
@@ -31,25 +30,28 @@ routed_networks = {
 
 service_networks = {
   dns = {
-    vlan_id           = 2803
-    subnet            = "10.16.16.52/30"
-    service_ipv4_host = 1
-    ipv6_subnet       = "2a07:e580:a10:1034::/64"
+    vlan_id              = 2803
+    subnet               = "10.16.16.52/30"
+    service_ipv4_address = "10.16.16.53"
+    ipv6_subnet          = "2a07:e580:a10:1034::/64"
   }
   ntp = {
-    vlan_id     = 2819
-    subnet      = "10.16.16.120/30"
-    ipv6_subnet = "2a07:e580:a10:1078::/64"
+    vlan_id              = 2819
+    subnet               = "10.16.16.120/30"
+    service_ipv4_address = "10.16.16.122"
+    ipv6_subnet          = "2a07:e580:a10:1078::/64"
   }
-  caddy = {
-    vlan_id     = 2821
-    subnet      = "10.16.16.80/30"
-    ipv6_subnet = "2a07:e580:a10:1050::/64"
+  proxy = {
+    vlan_id              = 2821
+    subnet               = "10.16.16.80/30"
+    service_ipv4_address = "10.16.16.82"
+    ipv6_subnet          = "2a07:e580:a10:1050::/64"
   }
   nat = {
-    vlan_id     = 2822
-    subnet      = "10.16.16.92/30"
-    ipv6_subnet = "2a07:e580:a10:105c::/64"
+    vlan_id              = 2822
+    subnet               = "10.16.16.92/30"
+    service_ipv4_address = "10.16.16.94"
+    ipv6_subnet          = "2a07:e580:a10:105c::/64"
   }
 }
 
@@ -59,7 +61,6 @@ trusted_internal_networks = [
 ]
 
 internal_egress_networks = ["10.0.0.0/8"]
-routed_public_subnets   = ["5.9.227.112/29"]
 
 # Activation stays false until the explicit DNS/firewall/egress cutover stage.
 cutover = {}

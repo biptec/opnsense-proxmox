@@ -38,7 +38,7 @@ mock_provider "opnsense" {
 }
 
 variables {
-  management_ipv4_address  = "10.0.0.2"
+  management_ssh_ipv4_cidr = "10.0.0.2/30"
   management_web_ipv4_cidr = "10.0.0.6/30"
   management_ssh_ipv6_cidr = "2001:db8:1::2/64"
   management_web_ipv6_cidr = "2001:db8:2::2/64"
@@ -46,16 +46,15 @@ variables {
 
   wan = {
     vlan_id                  = 3801
-    primary_address          = "198.51.100.112"
-    primary_prefix           = 26
+    primary_cidr             = "198.51.100.112/26"
     gateway                  = "198.51.100.65"
-    public_caddy_address     = "198.51.100.87"
+    public_proxy_address     = "198.51.100.87"
     public_dns_address       = "198.51.100.88"
     dedicated_egress_address = "198.51.100.95"
   }
 
-  routed_networks = {
-    public = {
+  routed_public_networks = {
+    public_transport = {
       vlan_id        = 3802
       subnet         = "203.0.113.112/29"
       router_address = "203.0.113.113"
@@ -64,14 +63,13 @@ variables {
   }
 
   service_networks = {
-    dns   = { vlan_id = 2803, subnet = "10.16.16.52/30", service_ipv4_host = 1, ipv6_subnet = "2001:db8:53::/64" }
-    ntp   = { vlan_id = 2819, subnet = "10.16.16.120/30", ipv6_subnet = "2001:db8:123::/64" }
-    caddy = { vlan_id = 2821, subnet = "10.16.16.80/30", ipv6_subnet = "2001:db8:80::/64" }
-    nat   = { vlan_id = 2822, subnet = "10.16.16.92/30", ipv6_subnet = "2001:db8:92::/64" }
+    dns   = { vlan_id = 2803, subnet = "10.16.16.52/30", service_ipv4_address = "10.16.16.53", ipv6_subnet = "2001:db8:53::/64" }
+    ntp   = { vlan_id = 2819, subnet = "10.16.16.120/30", service_ipv4_address = "10.16.16.122", ipv6_subnet = "2001:db8:123::/64" }
+    proxy = { vlan_id = 2821, subnet = "10.16.16.80/30", service_ipv4_address = "10.16.16.82", ipv6_subnet = "2001:db8:80::/64" }
+    nat   = { vlan_id = 2822, subnet = "10.16.16.92/30", service_ipv4_address = "10.16.16.94", ipv6_subnet = "2001:db8:92::/64" }
   }
 
   trusted_internal_networks = ["10.0.0.0/8", "2001:db8::/32"]
-  routed_public_subnets     = ["203.0.113.112/29"]
 }
 
 run "safe_platform_composition" {
@@ -90,7 +88,7 @@ run "safe_platform_composition" {
   assert {
     condition = (
       length(opnsense_interfaces_vlan.routed) == 1 &&
-      opnsense_interfaces_vlan.routed["public"].tag == 3802
+      opnsense_interfaces_vlan.routed["public_transport"].tag == 3802
     )
     error_message = "Primary router state must own only shared routed transport, not downstream service VLANs."
   }
@@ -99,7 +97,7 @@ run "safe_platform_composition" {
     condition = (
       length(opnsense_interfaces_vip.management) == 3 &&
       output.service_addresses["dns"] == "10.16.16.53" &&
-      output.service_ipv6_addresses["caddy"] == "2001:db8:80::2"
+      output.service_ipv6_addresses["proxy"] == "2001:db8:80::2"
     )
     error_message = "Management aliases and portable dual-stack service identities must be deterministic."
   }
@@ -109,10 +107,22 @@ run "safe_platform_composition" {
       output.dns_zone_name == "biptec.net" &&
       output.trusted_internal_networks == toset(["10.0.0.0/8", "2001:db8::/32"]) &&
       output.public_dns_address == "198.51.100.88" &&
-      output.public_caddy_address == "198.51.100.87" &&
+      output.public_proxy_address == "198.51.100.87" &&
       output.dedicated_egress_address == "198.51.100.95"
     )
-    error_message = "Public DNS, Caddy, and Source NAT identities must remain separate."
+    error_message = "Public DNS, reverse-proxy, and Source NAT identities must remain separate."
+  }
+
+  assert {
+    condition = (
+      output.downstream_router_contract.trunk_parent_device == "vtnet1" &&
+      output.downstream_router_contract.wan_interface == "opt10" &&
+      output.downstream_router_contract.routed_interfaces["public_transport"] == "opt10" &&
+      output.downstream_router_contract.routed_public_networks["public_transport"].subnet == "203.0.113.112/29" &&
+      output.downstream_router_contract.internal_dns_ipv4 == "10.16.16.53" &&
+      output.downstream_router_contract.public_dns_ipv4 == "198.51.100.88"
+    )
+    error_message = "The generic downstream contract must export primary-owned references without embedding downstream-specific data."
   }
 
   assert {
@@ -178,7 +188,7 @@ run "reject_duplicate_platform_vlan" {
   command = plan
 
   variables {
-    routed_networks = {
+    routed_public_networks = {
       public = {
         vlan_id        = 3801
         subnet         = "203.0.113.112/29"

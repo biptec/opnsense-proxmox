@@ -135,20 +135,26 @@ variable "ntp_internal" {
 }
 
 variable "public" {
-  description = "Routed public transport used only by externally published DNS2."
+  description = "Rigi public DNS IPv4/CIDR on the primary-owned routed-public transport. VLAN and gateway come from the primary-router contract."
   type = object({
-    vlan_id      = number
-    ipv4_cidr    = string
-    ipv4_gateway = string
+    ipv4_cidr = string
   })
 }
 
 variable "primary_router" {
   description = "Etna integration points exported by the primary-router state. The secondary state references shared transport but owns only its own additive router resources."
   type = object({
-    trunk_parent_device       = string
-    wan_interface             = string
-    public_interface          = string
+    trunk_parent_device = string
+    wan_interface       = string
+    routed_interfaces   = map(string)
+    routed_public_networks = map(object({
+      vlan_id             = number
+      subnet              = string
+      router_address      = string
+      description         = string
+      ipv6_subnet         = optional(string)
+      router_ipv6_address = optional(string)
+    }))
     internal_zone_id          = string
     public_zone_id            = string
     zone_name                 = string
@@ -157,6 +163,14 @@ variable "primary_router" {
     public_dns_ipv4           = string
     dns_active_service        = string
   })
+
+  validation {
+    condition = (
+      contains(keys(var.primary_router.routed_interfaces), "public_transport") &&
+      contains(keys(var.primary_router.routed_public_networks), "public_transport")
+    )
+    error_message = "primary_router must include the public_transport routed interface and network exported by primary-router."
+  }
 }
 
 variable "allow_router_readdress" {

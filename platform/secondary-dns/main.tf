@@ -1,6 +1,7 @@
 locals {
   cloudinit_datastore = coalesce(var.cloudinit_datastore, var.vm_datastore)
-  trunk_vlans         = join(";", [var.dns_internal.vlan_id, var.ntp_internal.vlan_id, var.public.vlan_id])
+  public_transport    = var.primary_router.routed_public_networks["public_transport"]
+  trunk_vlans         = join(";", [var.dns_internal.vlan_id, var.ntp_internal.vlan_id, local.public_transport.vlan_id])
 }
 
 resource "terraform_data" "contract" {
@@ -18,7 +19,7 @@ resource "terraform_data" "contract" {
         var.management.vlan_id,
         var.dns_internal.vlan_id,
         var.ntp_internal.vlan_id,
-        var.public.vlan_id,
+        local.public_transport.vlan_id,
       ])) == 4
       error_message = "Rigi management, DNS, NTP, and public VLAN IDs must be unique."
     }
@@ -29,6 +30,16 @@ resource "terraform_data" "contract" {
     }
 
     precondition {
+      condition = (
+        contains(keys(var.primary_router.routed_interfaces), "public_transport") &&
+        contains(keys(var.primary_router.routed_public_networks), "public_transport") &&
+        cidrsubnet(var.public.ipv4_cidr, 0, 0) == local.public_transport.subnet
+      )
+      error_message = "Rigi requires the primary-router public_transport interface/network, and its public IPv4 identity must belong to that exact shared subnet."
+    }
+
+
+    precondition {
       condition = alltrue([
         cidrcontains(var.management.ipv4_cidr, var.management.ipv4_gateway),
         cidrcontains(var.management.ipv6_cidr, var.management.ipv6_gateway),
@@ -36,7 +47,7 @@ resource "terraform_data" "contract" {
         cidrcontains(var.dns_internal.ipv6_cidr, var.dns_internal.ipv6_gateway),
         cidrcontains(var.ntp_internal.ipv4_cidr, var.ntp_internal.ipv4_gateway),
         cidrcontains(var.ntp_internal.ipv6_cidr, var.ntp_internal.ipv6_gateway),
-        cidrcontains(var.public.ipv4_cidr, var.public.ipv4_gateway),
+        cidrcontains(var.public.ipv4_cidr, local.public_transport.router_address),
       ])
       error_message = "Every Rigi gateway must be on-link for its configured service identity."
     }

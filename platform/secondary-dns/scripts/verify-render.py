@@ -24,6 +24,7 @@ cmd = [
     "-var=proxmox_endpoint=https://127.0.0.1:8006",
     "-var=proxmox_api_token=test@pam!test=test",
     "-var=transfer_tsig_secret=dGVzdC10cmFuc2Zlci1rZXk=",
+    '-var=primary_router={trunk_parent_device="vtnet1",wan_interface="opt1",routed_interfaces={public_transport="opt2"},routed_public_networks={public_transport={vlan_id=3802,subnet="5.9.227.112/29",router_address="5.9.227.113",description="Routed public transport"}},internal_zone_id="77777777-7777-4777-8777-777777777777",public_zone_id="88888888-8888-4888-8888-888888888888",zone_name="biptec.net",trusted_internal_networks=["10.0.0.0/8","2a07:e580:a10::/48"],internal_dns_ipv4="10.16.16.53",public_dns_ipv4="138.201.128.88",dns_active_service="bind"}',
 ]
 result = subprocess.run(cmd, cwd=root, input=expr, text=True, capture_output=True, check=True)
 payload = json.loads(json.loads(result.stdout.strip()))

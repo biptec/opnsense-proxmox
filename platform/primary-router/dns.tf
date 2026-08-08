@@ -2,8 +2,8 @@ locals {
   dns_primary_ns_fqdn = "${var.dns_zone.primary_ns_label}.${var.dns_zone.name}"
   internal_dns_ipv4   = module.router_foundation.service_addresses["dns"]
   internal_dns_ipv6   = try(module.router_foundation.service_ipv6_addresses["dns"], null)
-  internal_caddy_ipv4 = module.router_foundation.service_addresses["caddy"]
-  internal_caddy_ipv6 = try(module.router_foundation.service_ipv6_addresses["caddy"], null)
+  internal_proxy_ipv4 = module.router_foundation.service_addresses["proxy"]
+  internal_proxy_ipv6 = try(module.router_foundation.service_ipv6_addresses["proxy"], null)
   internal_ntp_ipv4   = module.router_foundation.service_addresses["ntp"]
   internal_ntp_ipv6   = try(module.router_foundation.service_ipv6_addresses["ntp"], null)
 }
@@ -118,16 +118,16 @@ resource "opnsense_bind_record" "internal_proxy_ipv4" {
   domain_id = opnsense_bind_primary_domain.internal.id
   name      = "proxy"
   type      = "A"
-  value     = local.internal_caddy_ipv4
+  value     = local.internal_proxy_ipv4
 }
 
 resource "opnsense_bind_record" "internal_proxy_ipv6" {
-  count = local.internal_caddy_ipv6 == null ? 0 : 1
+  count = local.internal_proxy_ipv6 == null ? 0 : 1
 
   domain_id = opnsense_bind_primary_domain.internal.id
   name      = "proxy"
   type      = "AAAA"
-  value     = local.internal_caddy_ipv6
+  value     = local.internal_proxy_ipv6
 }
 
 resource "opnsense_bind_record" "internal_ntp1_ipv4" {
@@ -164,8 +164,8 @@ resource "opnsense_bind_record" "public_proxy_ipv4" {
   domain_id = opnsense_bind_primary_domain.public.id
   name      = "proxy"
   type      = "A"
-  value     = var.wan.public_caddy_address
-  enabled   = var.cutover.public_caddy_vip
+  value     = var.wan.public_proxy_address
+  enabled   = var.cutover.public_proxy_vip
 }
 
 resource "opnsense_dns_service_cutover" "primary" {

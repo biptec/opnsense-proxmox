@@ -30,7 +30,7 @@ output "management_vlan" {
 
 output "trunk_vlans" {
   description = "Tagged VLANs passed to the Rigi trunk NIC."
-  value       = [var.dns_internal.vlan_id, var.ntp_internal.vlan_id, var.public.vlan_id]
+  value       = [var.dns_internal.vlan_id, var.ntp_internal.vlan_id, local.public_transport.vlan_id]
 }
 
 output "config_revision" {

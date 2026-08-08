@@ -4,14 +4,24 @@ variable "management_interface" {
   default     = "lan"
 }
 
-variable "management_ipv4_address" {
-  description = "Primary management IPv4 address already provisioned by the VM bootstrap, without prefix."
+variable "management_ssh_ipv4_cidr" {
+  description = "Primary SSH management IPv4/CIDR already provisioned by the Etna VM bootstrap."
   type        = string
+
+  validation {
+    condition     = can(cidrnetmask(var.management_ssh_ipv4_cidr)) && !strcontains(var.management_ssh_ipv4_cidr, ":") && try(tonumber(split("/", var.management_ssh_ipv4_cidr)[1]), 0) == 30
+    error_message = "management_ssh_ipv4_cidr must be an IPv4 /30 CIDR, for example 10.16.214.2/30."
+  }
 }
 
 variable "management_web_ipv4_cidr" {
-  description = "Secondary management IPv4/CIDR used as the WebGUI/API endpoint on the same untagged NIC."
+  description = "WebGUI/API management IPv4/CIDR on the same untagged management NIC."
   type        = string
+
+  validation {
+    condition     = can(cidrnetmask(var.management_web_ipv4_cidr)) && !strcontains(var.management_web_ipv4_cidr, ":") && try(tonumber(split("/", var.management_web_ipv4_cidr)[1]), 0) == 30
+    error_message = "management_web_ipv4_cidr must be an IPv4 /30 CIDR, for example 10.16.214.6/30."
+  }
 }
 
 variable "management_ssh_ipv6_cidr" {
@@ -63,17 +73,21 @@ variable "wan" {
   description = "Primary WAN VLAN and dedicated public identities."
   type = object({
     vlan_id                  = number
-    primary_address          = string
-    primary_prefix           = number
+    primary_cidr             = string
     gateway                  = string
-    public_caddy_address     = string
+    public_proxy_address     = string
     public_dns_address       = string
     dedicated_egress_address = string
   })
+
+  validation {
+    condition     = can(cidrnetmask(var.wan.primary_cidr)) && !strcontains(var.wan.primary_cidr, ":")
+    error_message = "wan.primary_cidr must be an IPv4 CIDR, for example 138.201.128.112/26."
+  }
 }
 
-variable "routed_networks" {
-  description = "Shared platform-owned routed networks only. Downstream host/service VLANs belong to their own Terraform states."
+variable "routed_public_networks" {
+  description = "Shared platform-owned routed public networks. Their subnets are automatically excluded from outbound NAT; downstream networks belong to their own Terraform states."
   type = map(object({
     vlan_id             = number
     subnet              = string
@@ -85,14 +99,25 @@ variable "routed_networks" {
 }
 
 variable "service_networks" {
-  description = "Portable router-hosted services. VLAN remains reserved/inactive while hosted_on_router is true."
+  description = "Portable router-hosted services with explicit stable service IPv4 addresses. The other usable host in each /30 is reserved for the router side after externalization."
   type = map(object({
-    vlan_id           = number
-    subnet            = string
-    service_ipv4_host = optional(number, 2)
-    ipv6_subnet       = optional(string)
-    hosted_on_router  = optional(bool, true)
+    vlan_id              = number
+    subnet               = string
+    service_ipv4_address = string
+    ipv6_subnet          = optional(string)
+    hosted_on_router     = optional(bool, true)
   }))
+
+  validation {
+    condition = alltrue([
+      for network in values(var.service_networks) :
+      contains([
+        try(cidrhost(network.subnet, 1), ""),
+        try(cidrhost(network.subnet, 2), ""),
+      ], network.service_ipv4_address)
+    ])
+    error_message = "Each service_ipv4_address must be one of the two usable addresses in its IPv4 /30 subnet."
+  }
 }
 
 variable "internal_egress_networks" {
@@ -101,10 +126,6 @@ variable "internal_egress_networks" {
   default     = ["10.0.0.0/8"]
 }
 
-variable "routed_public_subnets" {
-  description = "Public routed subnets explicitly excluded from outbound NAT."
-  type        = set(string)
-}
 
 variable "ntp_servers" {
   description = "Upstream NTP servers used by the router."
@@ -162,8 +183,8 @@ variable "cutover" {
     dns_verify_timeout           = optional(number, 30)
     management_endpoint_firewall = optional(bool, false)
     public_dns_vip               = optional(bool, false)
-    public_caddy_vip             = optional(bool, false)
-    caddy_enabled                = optional(bool, false)
+    public_proxy_vip             = optional(bool, false)
+    proxy_enabled                = optional(bool, false)
     ntp_serving                  = optional(bool, false)
     egress_vip                   = optional(bool, false)
     outbound_nat                 = optional(bool, false)

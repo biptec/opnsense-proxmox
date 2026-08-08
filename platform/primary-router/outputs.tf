@@ -16,7 +16,7 @@ output "routed_interfaces" {
 }
 
 output "service_addresses" {
-  description = "Portable IPv4 service endpoints (.2) owned by the platform."
+  description = "Stable portable IPv4 service endpoints owned by the platform."
   value       = module.router_foundation.service_addresses
 }
 
@@ -35,9 +35,9 @@ output "public_dns_address" {
   value       = var.wan.public_dns_address
 }
 
-output "public_caddy_address" {
+output "public_proxy_address" {
   description = "Dedicated public reverse-proxy identity."
-  value       = var.wan.public_caddy_address
+  value       = var.wan.public_proxy_address
 }
 
 output "dedicated_egress_address" {
@@ -90,12 +90,30 @@ output "internal_dns_address" {
   value       = local.internal_dns_ipv4
 }
 
-output "internal_caddy_address" {
-  description = "Portable internal Caddy IPv4 endpoint."
-  value       = local.internal_caddy_ipv4
+output "internal_proxy_address" {
+  description = "Portable internal reverse-proxy IPv4 endpoint."
+  value       = local.internal_proxy_ipv4
 }
 
 output "internal_ntp_address" {
   description = "Portable internal NTP IPv4 endpoint."
   value       = local.internal_ntp_ipv4
+}
+
+
+output "downstream_router_contract" {
+  description = "Generic primary-router references consumed by downstream states. Contains no downstream-specific configuration."
+  value = {
+    trunk_parent_device       = var.trunk_parent_device
+    wan_interface             = opnsense_interfaces_assignment.wan.name
+    routed_interfaces         = { for name, assignment in opnsense_interfaces_assignment.routed : name => assignment.name }
+    routed_public_networks    = var.routed_public_networks
+    internal_zone_id          = opnsense_bind_primary_domain.internal.id
+    public_zone_id            = opnsense_bind_primary_domain.public.id
+    zone_name                 = var.dns_zone.name
+    trusted_internal_networks = var.trusted_internal_networks
+    internal_dns_ipv4         = local.internal_dns_ipv4
+    public_dns_ipv4           = var.wan.public_dns_address
+    dns_active_service        = opnsense_dns_service_cutover.primary.active_service
+  }
 }

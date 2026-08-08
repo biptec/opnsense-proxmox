@@ -97,7 +97,7 @@ locals {
     }
     public_to_primary_tcp = {
       sequence    = 302
-      interfaces  = [var.primary_router.public_interface]
+      interfaces  = [var.primary_router.routed_interfaces["public_transport"]]
       protocol    = "TCP"
       source      = local.public_ipv4
       destination = var.primary_router.public_dns_ipv4
@@ -107,7 +107,7 @@ locals {
     }
     public_to_primary_udp = {
       sequence    = 303
-      interfaces  = [var.primary_router.public_interface]
+      interfaces  = [var.primary_router.routed_interfaces["public_transport"]]
       protocol    = "UDP"
       source      = local.public_ipv4
       destination = var.primary_router.public_dns_ipv4
@@ -157,7 +157,7 @@ locals {
     }
     public_internet_egress = {
       sequence    = 308
-      interfaces  = [var.primary_router.public_interface]
+      interfaces  = [var.primary_router.routed_interfaces["public_transport"]]
       protocol    = "any"
       source      = local.public_ipv4
       destination = opnsense_firewall_alias.rigi_private_ipv4.name

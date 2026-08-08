@@ -81,16 +81,16 @@ locals {
         ]
       }
       public = {
-        id        = var.public.vlan_id
+        id        = local.public_transport.vlan_id
         link      = "trunk0"
         addresses = [var.public.ipv4_cidr]
         routes = [
-          { to = "0.0.0.0/0", via = var.public.ipv4_gateway, metric = 100 },
-          { to = cidrsubnet(var.public.ipv4_cidr, 0, 0), scope = "link", table = var.public.vlan_id },
-          { to = "0.0.0.0/0", via = var.public.ipv4_gateway, table = var.public.vlan_id },
+          { to = "0.0.0.0/0", via = local.public_transport.router_address, metric = 100 },
+          { to = cidrsubnet(var.public.ipv4_cidr, 0, 0), scope = "link", table = local.public_transport.vlan_id },
+          { to = "0.0.0.0/0", via = local.public_transport.router_address, table = local.public_transport.vlan_id },
         ]
         "routing-policy" = [
-          { from = "${local.public_ipv4}/32", table = var.public.vlan_id, priority = 103802 },
+          { from = "${local.public_ipv4}/32", table = local.public_transport.vlan_id, priority = 103802 },
         ]
       }
     }
@@ -155,7 +155,7 @@ locals {
         zone "${trimsuffix(var.primary_router.zone_name, ".")}" {
             type secondary;
             primaries { ${var.primary_router.public_dns_ipv4} key "${var.transfer_tsig_name}"; };
-            allow-notify { ${var.public.ipv4_gateway}; };
+            allow-notify { ${local.public_transport.router_address}; };
             file "/var/cache/bind/public/${trimsuffix(var.primary_router.zone_name, ".")}.db";
         };
     };
