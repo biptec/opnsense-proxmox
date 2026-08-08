@@ -48,3 +48,13 @@ output "router_hosted_service_addresses" {
     for name, network in local.router_hosted_networks : name => local.service_addresses[name]
   }
 }
+
+output "service_ipv6_addresses" {
+  description = "Portable IPv6 host ::2 address for every service with a reserved IPv6 /64."
+  value       = local.service_ipv6_addresses
+}
+
+output "router_ipv6_addresses" {
+  description = "Reserved IPv6 router ::1 gateway used when a dual-stack service is externalized."
+  value       = local.router_ipv6_addresses
+}

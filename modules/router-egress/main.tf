@@ -66,8 +66,7 @@ resource "opnsense_interfaces_vip" "dedicated_egress" {
 }
 
 resource "opnsense_firewall_nat_settings" "outbound" {
-  count = var.outbound_nat_enabled ? 1 : 0
-  mode  = "hybrid"
+  mode = var.outbound_nat_enabled ? "hybrid" : "automatic"
 
   depends_on = [terraform_data.address_contract]
 }

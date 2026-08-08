@@ -31,3 +31,13 @@ output "service_binding_guard" {
     caddy = opnsense_caddy_settings.main.id
   }))
 }
+
+output "bind_listener_ipv6_addresses" {
+  description = "Explicit BIND IPv6 listener addresses; ::1 remains present for os-bind compatibility."
+  value       = local.bind_listener_ipv6
+}
+
+output "ntp_service_ipv6_address" {
+  description = "Internal NTP IPv6 service address when dual-stack service addressing is configured."
+  value       = local.internal_ntp_ipv6 == "" ? null : local.internal_ntp_ipv6
+}

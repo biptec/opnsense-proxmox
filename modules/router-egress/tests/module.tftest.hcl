@@ -25,12 +25,12 @@ run "detached_by_default" {
   assert {
     condition = (
       length(opnsense_interfaces_vip.dedicated_egress) == 0 &&
-      length(opnsense_firewall_nat_settings.outbound) == 0 &&
+      opnsense_firewall_nat_settings.outbound.mode == "automatic" &&
       length(opnsense_firewall_alias.internal_egress) == 0 &&
       length(opnsense_firewall_nat.routed_public_no_nat) == 0 &&
       length(opnsense_firewall_nat.dedicated_egress) == 0
     )
-    error_message = "Egress VIP and NAT policy must remain detached by default."
+    error_message = "Egress VIP and custom NAT rules must remain detached by default while the owned outbound NAT mode stays automatic."
   }
 }
 
@@ -61,7 +61,7 @@ run "outbound_nat_contract" {
   }
 
   assert {
-    condition     = opnsense_firewall_nat_settings.outbound[0].mode == "hybrid"
+    condition     = opnsense_firewall_nat_settings.outbound.mode == "hybrid"
     error_message = "Explicit NO-NAT and dedicated egress rules require hybrid outbound NAT mode."
   }
 

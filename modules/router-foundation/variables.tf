@@ -117,11 +117,13 @@ variable "allow_service_readdress" {
 }
 
 variable "service_networks" {
-  description = "One reserved VLAN and one canonical IPv4 /30 per movable service. While hosted on OPNsense, .2/30 lives on loopback. After externalization, .1/30 becomes the router VLAN gateway and .2/30 moves to the service VM."
+  description = "One reserved VLAN and canonical IPv4 /30 per movable service, with an explicit stable service host (default host 2). Optional IPv6 /64 uses ::2 for the service and ::1 for the future router side."
   type = map(object({
-    vlan_id          = number
-    subnet           = string
-    hosted_on_router = optional(bool, true)
+    vlan_id           = number
+    subnet            = string
+    service_ipv4_host = optional(number, 2)
+    ipv6_subnet       = optional(string)
+    hosted_on_router  = optional(bool, true)
   }))
 
   validation {
@@ -158,5 +160,37 @@ variable "service_networks" {
       try(cidrhost(network.subnet, 0), "") == try(split("/", network.subnet)[0], "invalid")
     ])
     error_message = "Every service subnet must be a canonical IPv4 /30 network address."
+  }
+
+  validation {
+    condition = alltrue([
+      for network in values(var.service_networks) :
+      contains([1, 2], network.service_ipv4_host)
+    ])
+    error_message = "service_ipv4_host must be 1 or 2. The other usable host is reserved for the router side after externalization."
+  }
+
+  validation {
+    condition = alltrue([
+      for network in values(var.service_networks) :
+      network.ipv6_subnet == null || (
+        can(cidrhost(network.ipv6_subnet, 0)) &&
+        strcontains(network.ipv6_subnet, ":") &&
+        try(tonumber(split("/", network.ipv6_subnet)[1]), 0) == 64 &&
+        try(cidrhost(network.ipv6_subnet, 0), "") == try(split("/", network.ipv6_subnet)[0], "invalid")
+      )
+    ])
+    error_message = "When set, every service ipv6_subnet must be a canonical IPv6 /64 network address."
+  }
+
+  validation {
+    condition = length(toset([
+      for network in values(var.service_networks) : network.ipv6_subnet
+      if network.ipv6_subnet != null
+      ])) == length([
+      for network in values(var.service_networks) : network.ipv6_subnet
+      if network.ipv6_subnet != null
+    ])
+    error_message = "Every configured service IPv6 /64 must be unique."
   }
 }

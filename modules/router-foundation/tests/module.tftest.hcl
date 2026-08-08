@@ -265,3 +265,98 @@ run "explicit_service_readdress_approval" {
     error_message = "Permanent service gateway readdressing must require the explicit safety input."
   }
 }
+
+run "dual_stack_service_endpoints" {
+  command = plan
+
+  variables {
+    service_networks = {
+      dns = {
+        vlan_id     = 210
+        subnet      = "10.53.0.0/30"
+        ipv6_subnet = "2001:db8:53::/64"
+      }
+      caddy = {
+        vlan_id          = 211
+        subnet           = "10.80.0.0/30"
+        ipv6_subnet      = "2001:db8:80::/64"
+        hosted_on_router = false
+      }
+      ntp = {
+        vlan_id     = 212
+        subnet      = "10.123.0.0/30"
+        ipv6_subnet = "2001:db8:123::/64"
+      }
+    }
+  }
+
+  assert {
+    condition = (
+      opnsense_interfaces_assignment.service["dns"].ipv6.mode == "static" &&
+      opnsense_interfaces_assignment.service["dns"].ipv6.address == "2001:db8:53::2" &&
+      opnsense_interfaces_assignment.service["dns"].ipv6.prefix == 64 &&
+      opnsense_interfaces_assignment.service["caddy"].ipv6.address == "2001:db8:80::1" &&
+      output.service_ipv6_addresses["ntp"] == "2001:db8:123::2" &&
+      output.router_ipv6_addresses["caddy"] == "2001:db8:80::1"
+    )
+    error_message = "Dual-stack service endpoints must preserve ::2 on-router and move the router to ::1 after externalization."
+  }
+}
+
+run "reject_invalid_service_ipv6_prefix" {
+  command = plan
+
+  variables {
+    service_networks = {
+      dns = {
+        vlan_id     = 210
+        subnet      = "10.53.0.0/30"
+        ipv6_subnet = "2001:db8:53::/56"
+      }
+    }
+  }
+
+  expect_failures = [var.service_networks]
+}
+
+run "reversed_ipv4_service_hosts" {
+  command = plan
+
+  variables {
+    service_networks = {
+      dns = {
+        vlan_id           = 210
+        subnet            = "10.53.0.0/30"
+        service_ipv4_host = 1
+        ipv6_subnet       = "2001:db8:53::/64"
+      }
+    }
+  }
+
+  assert {
+    condition = (
+      opnsense_interfaces_assignment.service["dns"].ipv4.address == "10.53.0.1" &&
+      output.service_addresses["dns"] == "10.53.0.1" &&
+      output.router_addresses["dns"] == "10.53.0.2" &&
+      output.service_ipv6_addresses["dns"] == "2001:db8:53::2" &&
+      output.router_ipv6_addresses["dns"] == "2001:db8:53::1"
+    )
+    error_message = "An explicitly reversed IPv4 /30 must keep its selected service host while IPv6 retains the ::2 service convention."
+  }
+}
+
+run "reject_invalid_service_ipv4_host" {
+  command = plan
+
+  variables {
+    service_networks = {
+      dns = {
+        vlan_id           = 210
+        subnet            = "10.53.0.0/30"
+        service_ipv4_host = 3
+      }
+    }
+  }
+
+  expect_failures = [var.service_networks]
+}

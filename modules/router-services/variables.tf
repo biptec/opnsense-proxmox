@@ -135,6 +135,28 @@ variable "service_addresses" {
   }
 }
 
+variable "service_ipv6_addresses" {
+  description = "Optional portable IPv6 service endpoint addresses produced by router-foundation. When set, dns, ntp, and caddy must all be present."
+  type        = map(string)
+  default     = {}
+
+  validation {
+    condition = (
+      length(var.service_ipv6_addresses) == 0 || (
+        alltrue([for name in ["dns", "ntp", "caddy"] : contains(keys(var.service_ipv6_addresses), name)]) &&
+        length(toset(values(var.service_ipv6_addresses))) == length(var.service_ipv6_addresses) &&
+        alltrue([
+          for address in values(var.service_ipv6_addresses) :
+          !strcontains(address, "/") &&
+          strcontains(address, ":") &&
+          can(cidrhost("${address}/128", 0))
+        ])
+      )
+    )
+    error_message = "service_ipv6_addresses must be empty or contain unique dns, ntp, and caddy IPv6 addresses without prefixes."
+  }
+}
+
 variable "service_interfaces" {
   description = "Logical service interfaces produced by the router-foundation module. The ntp key is required."
   type        = map(string)

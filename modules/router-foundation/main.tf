@@ -1,9 +1,17 @@
 locals {
   service_addresses = {
-    for name, network in var.service_networks : name => cidrhost(network.subnet, 2)
+    for name, network in var.service_networks : name => cidrhost(network.subnet, network.service_ipv4_host)
   }
   router_addresses = {
-    for name, network in var.service_networks : name => cidrhost(network.subnet, 1)
+    for name, network in var.service_networks : name => cidrhost(network.subnet, network.service_ipv4_host == 1 ? 2 : 1)
+  }
+  service_ipv6_addresses = {
+    for name, network in var.service_networks : name => cidrhost(network.ipv6_subnet, 2)
+    if network.ipv6_subnet != null
+  }
+  router_ipv6_addresses = {
+    for name, network in var.service_networks : name => cidrhost(network.ipv6_subnet, 1)
+    if network.ipv6_subnet != null
   }
   router_hosted_networks = {
     for name, network in var.service_networks : name => network
@@ -105,6 +113,8 @@ resource "opnsense_interfaces_assignment" "service" {
   }
 
   ipv6 = {
-    mode = "none"
+    mode    = each.value.ipv6_subnet == null ? "none" : "static"
+    address = each.value.ipv6_subnet == null ? null : (each.value.hosted_on_router ? local.service_ipv6_addresses[each.key] : local.router_ipv6_addresses[each.key])
+    prefix  = each.value.ipv6_subnet == null ? null : 64
   }
 }

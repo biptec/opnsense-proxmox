@@ -270,3 +270,25 @@ run "reject_offlink_public_service_alias" {
 
   expect_failures = [terraform_data.listener_contract]
 }
+
+run "dual_stack_internal_listeners" {
+  command = plan
+
+  variables {
+    service_ipv6_addresses = {
+      dns   = "2001:db8:53::2"
+      ntp   = "2001:db8:123::2"
+      caddy = "2001:db8:80::2"
+    }
+  }
+
+  assert {
+    condition = (
+      !opnsense_bind_settings.main.disable_ipv6 &&
+      opnsense_bind_settings.main.listen_ipv6 == toset(["::1", "2001:db8:53::2"]) &&
+      opnsense_caddy_settings.main.listen_addresses == toset(["198.51.100.87", "10.80.0.2", "2001:db8:80::2"]) &&
+      output.ntp_service_ipv6_address == "2001:db8:123::2"
+    )
+    error_message = "Dual-stack service data must bind BIND and Caddy to the portable internal IPv6 endpoints while NTP follows its service interface."
+  }
+}

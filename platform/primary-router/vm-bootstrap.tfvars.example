@@ -1,0 +1,22 @@
+# Etna VM bootstrap values used with the generic ../../tofu VM root.
+# This is a separate Terraform state only because the OPNsense API cannot be
+# configured until this VM exists and has completed its first boot.
+node_name       = "tofana"
+vm_name         = "etna"
+vm_datastore    = "local-vmdata01"
+image_datastore = "local"
+bridge          = "vmbr0"
+dns_domain      = "host.biptec.net"
+
+management_ipv4 = {
+  mode    = "static"
+  address = "10.16.214.2/30"
+}
+
+# The second VirtIO NIC is a tagged trunk. Do not set vlan_id here; VLANs are
+# created inside OPNsense on vtnet1.
+additional_nics = [
+  {
+    bridge = "vmbr1"
+  }
+]

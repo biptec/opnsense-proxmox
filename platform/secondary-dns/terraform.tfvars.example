@@ -1,0 +1,44 @@
+# Proxmox placement. Keep vm_datastore aligned with the existing test VM storage.
+node_name         = "tofana"
+vm_datastore      = "local-vmdata01"
+image_datastore   = "local"
+snippet_datastore = "local"
+bridge            = "vmbr1"
+
+management = {
+  vlan_id      = 508
+  ipv4_cidr    = "10.16.222.2/30"
+  ipv4_gateway = "10.16.222.1"
+  ipv6_cidr    = "2a07:e580:a10:de00::2/64"
+  ipv6_gateway = "2a07:e580:a10:de00::1"
+}
+
+dns_internal = {
+  vlan_id      = 2804
+  ipv4_cidr    = "10.16.18.53/30"
+  ipv4_gateway = "10.16.18.54"
+  ipv6_cidr    = "2a07:e580:a10:1234::2/64"
+  ipv6_gateway = "2a07:e580:a10:1234::1"
+}
+
+ntp_internal = {
+  vlan_id      = 2820
+  ipv4_cidr    = "10.16.18.122/30"
+  ipv4_gateway = "10.16.18.121"
+  ipv6_cidr    = "2a07:e580:a10:1278::2/64"
+  ipv6_gateway = "2a07:e580:a10:1278::1"
+}
+
+public = {
+  ipv4_cidr = "5.9.227.114/29"
+}
+
+# The primary-router integration contract contains dynamic OPNsense IDs/names and
+# is intentionally not duplicated here. After primary-router has been applied,
+# generate a local gitignored tfvars file from its state:
+#
+# tofu -chdir=../primary-router output -json downstream_router_contract \
+#   | jq '{primary_router: .}' > primary-router.auto.tfvars.json
+#
+# transfer_tsig_secret is intentionally omitted. Supply it from a gitignored
+# tfvars/backend secret source. It is stored in protected Terraform state.
