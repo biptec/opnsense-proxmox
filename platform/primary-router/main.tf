@@ -157,6 +157,11 @@ resource "terraform_data" "platform_contract" {
     }
 
     precondition {
+      condition     = !var.cutover.public_dns_ingress || (var.cutover.dns_target == "bind" && var.cutover.public_dns_vip)
+      error_message = "Public DNS WAN ingress requires BIND ownership and the public DNS VIP."
+    }
+
+    precondition {
       condition     = !var.cutover.proxy_enabled || var.cutover.public_proxy_vip
       error_message = "The reverse proxy cannot be enabled until its public VIP is attached."
     }

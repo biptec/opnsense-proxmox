@@ -18,12 +18,7 @@ Do not move the live Proxmox WAN address/gateway during a test apply. The host-s
 
 The VM bootstrap and router configuration intentionally use two Terraform states, but they are one Etna ownership domain. The split is a bootstrap dependency, not an architectural ownership split: the OPNsense provider cannot read/import/configure Etna until the VM exists, boots, and exposes its API. Keep both Etna value files in this directory; apply the VM bootstrap state first, then the primary-router state. Destroy in reverse order.
 
-Copy `vm-bootstrap.tfvars.example` to the gitignored `vm-bootstrap.tfvars`, add the normal secret/image inputs outside Git, then run the generic VM root with that Etna overlay:
-
-```sh
-cp vm-bootstrap.tfvars.example vm-bootstrap.tfvars
-tofu -chdir=../../tofu apply -var-file=../platform/primary-router/vm-bootstrap.tfvars
-```
+Copy `vm-bootstrap.tfvars.example` to the gitignored `vm-bootstrap.tfvars` and add the normal secret/image inputs outside Git. For the first production deployment, also copy `vm-bootstrap-staging.tfvars.example`; that later var-file limits Etna NIC1 to the Rigi validation VLANs and keeps provider-facing VLAN `3801` blocked until the router-only cutover. Follow `../DEPLOYMENT_RUNBOOK.md` rather than applying the unrestricted trunk directly.
 
 ## Bootstrap
 
@@ -99,11 +94,21 @@ cutover = {
 }
 ```
 
-The dependency graph attaches the VIP, runs the guarded DNS cutover, verifies BIND, and only then enables WAN TCP/UDP 53 rules. This avoids a window where wildcard Unbound is publicly reachable through the DNS VIP. After a successful transition, return `allow_dns_cutover` to `false` while keeping `dns_target = "bind"` and `public_dns_vip = true`.
+The dependency graph attaches the VIP, runs the guarded DNS cutover, and verifies BIND, but WAN TCP/UDP 53 stays blocked. This lets downstream secondary DNS be deployed and tested before the WAN cutover without making DNS1 publicly reachable. After a successful transition, return `allow_dns_cutover` to `false` while keeping `dns_target = "bind"` and `public_dns_vip = true`.
+
+Open public authoritative DNS only in the later service-activation phase:
+
+```hcl
+cutover = {
+  dns_target         = "bind"
+  public_dns_vip     = true
+  public_dns_ingress = true
+}
+```
 
 Internal DNS recursion is allowed only for `trusted_internal_networks` and only on the internal DNS destination. The public view matches the public DNS destination, permits authoritative queries, and has recursion disabled.
 
-NTP has no WAN rule. Internal UDP/123 opens only when `ntp_serving = true`. Public reverse-proxy TCP/80 and TCP/443 and public authoritative DNS TCP/UDP 53 are opened in both address families only with their existing cutover gates. Primary-owned internal service and management rules apply on every Etna ingress interface except WAN, constrained by source/destination identities. The outbound NAT mode is always owned by this state: `automatic` while egress is safe/detached and `hybrid` while explicit IPv4 NO-NAT/SNAT and IPv6 NO-NAT/NAT66 rules are active. Downstream states own the firewall pass rules that permit their workloads to use that shared egress policy.
+NTP has no WAN rule. Internal UDP/123 opens only when `ntp_serving = true`. Public reverse-proxy TCP/80 and TCP/443 and public authoritative DNS TCP/UDP 53 are opened in both address families only with their explicit cutover gates. Primary-owned internal service and management rules apply on every Etna ingress interface except WAN, constrained by source/destination identities. The outbound NAT mode is always owned by this state: `automatic` while egress is safe/detached and `hybrid` while explicit IPv4 NO-NAT/SNAT and IPv6 NO-NAT/NAT66 rules are active. Downstream states own the firewall pass rules that permit their workloads to use that shared egress policy.
 
 ## Management endpoint cutover
 

@@ -222,6 +222,12 @@ variable "ssh_public_key" {
   description = "Optional public SSH key for the ubuntu account. Password and root SSH remain disabled."
 }
 
+variable "public_dns_ingress" {
+  type        = bool
+  default     = false
+  description = "Expose Rigi public authoritative DNS through Etna WAN firewall rules. Keep false until the public-service activation phase."
+}
+
 variable "internal_recursion_enabled" {
   type        = bool
   default     = true

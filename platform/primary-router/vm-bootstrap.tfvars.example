@@ -13,8 +13,10 @@ management_ipv4 = {
   address = "10.16.214.2/30"
 }
 
-# The second VirtIO NIC is a tagged trunk. Do not set vlan_id here; VLANs are
-# created inside OPNsense on vtnet1.
+# The second VirtIO NIC is the final unrestricted tagged trunk. Do not set
+# vlan_id here; VLANs are created inside OPNsense on vtnet1. Before WAN
+# cutover, apply vm-bootstrap-staging.tfvars as a later var-file so VLAN 3801
+# stays blocked while Etna/Rigi are validated.
 additional_nics = [
   {
     bridge = "vmbr1"

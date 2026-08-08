@@ -43,3 +43,6 @@ public = {
 #
 # transfer_tsig_secret is intentionally omitted. Supply it from a gitignored
 # tfvars/backend secret source. It is stored in protected Terraform state.
+
+# Keep DNS2 staged behind Etna until the final service-activation phase.
+public_dns_ingress = false
