@@ -15,10 +15,11 @@ management_ipv4 = {
 
 # The second VirtIO NIC is the final unrestricted tagged trunk. Do not set
 # vlan_id here; VLANs are created inside OPNsense on vtnet1. Before WAN
-# cutover, apply vm-bootstrap-staging.tfvars as a later var-file so VLAN 3801
-# stays blocked while Etna/Rigi are validated.
+# cutover, VLAN 3801 is isolated at the provider-facing physical Proxmox NIC,
+# which is not configured as access VLAN 3801 until the maintenance window.
 additional_nics = [
   {
-    bridge = "vmbr1"
+    bridge      = "vmbr1"
+    mac_address = "90:1b:0e:95:a1:0b"
   }
 ]
