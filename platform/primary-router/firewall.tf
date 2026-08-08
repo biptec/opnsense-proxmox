@@ -127,7 +127,7 @@ locals {
       description      = "Internal NTP"
     }
     public_dns_tcp = {
-      enabled     = var.cutover.dns_target == "bind"
+      enabled     = var.cutover.public_dns_ingress
       sequence    = 200
       interfaces  = [opnsense_interfaces_assignment.wan.name]
       action      = "pass"
@@ -138,7 +138,7 @@ locals {
       description = "Public authoritative DNS TCP"
     }
     public_dns_udp = {
-      enabled     = var.cutover.dns_target == "bind"
+      enabled     = var.cutover.public_dns_ingress
       sequence    = 201
       interfaces  = [opnsense_interfaces_assignment.wan.name]
       action      = "pass"
@@ -297,7 +297,7 @@ locals {
     },
     {
       public_dns_tcp_ipv6 = {
-        enabled          = var.cutover.dns_target == "bind"
+        enabled          = var.cutover.public_dns_ingress
         sequence         = 400
         interfaces       = [opnsense_interfaces_assignment.wan.name]
         interface_invert = false
@@ -309,7 +309,7 @@ locals {
         description      = "Public authoritative DNS TCP IPv6"
       }
       public_dns_udp_ipv6 = {
-        enabled          = var.cutover.dns_target == "bind"
+        enabled          = var.cutover.public_dns_ingress
         sequence         = 401
         interfaces       = [opnsense_interfaces_assignment.wan.name]
         interface_invert = false

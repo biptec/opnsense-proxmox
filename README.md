@@ -52,6 +52,7 @@ examples/dns-verification   Primary/secondary verification contract
 modules/router-foundation    Management listeners and loopback-first /30 service endpoints
 modules/router-services      Public VIPs and explicit DNS, NTP, and Caddy listeners
 modules/router-egress        Dedicated outbound NAT identity and routed-public NO-NAT policy
+platform/DEPLOYMENT_RUNBOOK.md Staged production deployment, router cutover, rollback and service activation
 platform/primary-router     Shared Etna L3/VLAN/service composition and production-like values
 platform/secondary-dns      Immutable Rigi secondary DNS/NTP VM and multi-homed policy routing
 modules/caddy-reverse-proxy Reusable domain-to-upstream Caddy module; DNS remains external

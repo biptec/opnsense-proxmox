@@ -54,7 +54,7 @@ nftables defaults input and forwarding to drop. It permits only:
 - public DNS TCP/UDP 53 on `5.9.227.114` and `2a01:4f8:fff3:107::114`;
 - ICMP/ICMPv6 and established traffic.
 
-Output is allowed so the secondary can fetch packages, synchronize time, resolve recursively for internal clients, and transfer zones. Internal Rigi IPv6 egress uses Etna's stateful NAT66 policy, while `2a01:4f8:fff3:107::/64` remains routed end-to-end without NAT. The same state creates the required Etna firewall rules. Trusted-client service rules apply on every Etna ingress interface except WAN, so they do not need to know which current or future internal VLAN delivered the packet.
+Output is allowed so the secondary can fetch packages, synchronize time, resolve recursively for internal clients, and transfer zones. Internal Rigi IPv6 egress uses Etna's stateful NAT66 policy, while `2a01:4f8:fff3:107::/64` remains routed end-to-end without NAT. The same state creates the required Etna firewall rules. Trusted-client service rules apply on every Etna ingress interface except WAN, so they do not need to know which current or future internal VLAN delivered the packet. Public DNS2 WAN rules are owned here too, but remain disabled while `public_dns_ingress = false` (the default); enable that gate only in the final public-service activation phase. This gate changes only Etna firewall rules and does not alter Rigi cloud-init or replace the VM.
 
 ## Immutable lifecycle
 

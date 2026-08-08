@@ -255,12 +255,35 @@ run "guarded_bind_cutover" {
       opnsense_dns_service_cutover.primary.allow_cutover &&
       opnsense_firewall_filter.platform_ipv4["internal_dns_tcp"].enabled &&
       opnsense_firewall_filter.platform_ipv4["internal_dns_udp"].enabled &&
+      !opnsense_firewall_filter.platform_ipv4["public_dns_tcp"].enabled &&
+      !opnsense_firewall_filter.platform_ipv4["public_dns_udp"].enabled &&
+      !opnsense_firewall_filter.platform_ipv6["public_dns_tcp_ipv6"].enabled &&
+      !opnsense_firewall_filter.platform_ipv6["public_dns_udp_ipv6"].enabled
+    )
+    error_message = "BIND cutover must attach the DNS VIP for secondary integration while keeping WAN DNS ingress closed by default."
+  }
+}
+
+run "explicit_public_dns_ingress" {
+  command = plan
+
+  variables {
+    cutover = {
+      dns_target         = "bind"
+      allow_dns_cutover  = true
+      public_dns_vip     = true
+      public_dns_ingress = true
+    }
+  }
+
+  assert {
+    condition = (
       opnsense_firewall_filter.platform_ipv4["public_dns_tcp"].enabled &&
       opnsense_firewall_filter.platform_ipv4["public_dns_udp"].enabled &&
       opnsense_firewall_filter.platform_ipv6["public_dns_tcp_ipv6"].enabled &&
       opnsense_firewall_filter.platform_ipv6["public_dns_udp_ipv6"].enabled
     )
-    error_message = "BIND cutover must attach the DNS VIP and activate only DNS-specific ingress policy."
+    error_message = "Public authoritative DNS WAN ingress must require its explicit cutover gate."
   }
 }
 
@@ -285,6 +308,18 @@ run "reject_public_dns_vip_while_unbound_owns_port" {
     cutover = {
       dns_target     = "unbound"
       public_dns_vip = true
+    }
+  }
+
+  expect_failures = [terraform_data.platform_contract]
+}
+
+run "reject_public_dns_ingress_without_bind" {
+  command = plan
+
+  variables {
+    cutover = {
+      public_dns_ingress = true
     }
   }
 

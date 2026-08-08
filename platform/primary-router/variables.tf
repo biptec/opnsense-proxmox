@@ -219,6 +219,7 @@ variable "cutover" {
     dns_verify_timeout           = optional(number, 30)
     management_endpoint_firewall = optional(bool, false)
     public_dns_vip               = optional(bool, false)
+    public_dns_ingress           = optional(bool, false)
     public_proxy_vip             = optional(bool, false)
     proxy_enabled                = optional(bool, false)
     ntp_serving                  = optional(bool, false)

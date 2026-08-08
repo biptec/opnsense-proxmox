@@ -116,6 +116,7 @@ locals {
       description = "Rigi DNS2 refresh from primary public DNS"
     }
     public_dns2_tcp = {
+      enabled     = var.public_dns_ingress
       sequence    = 304
       interfaces  = [var.primary_router.wan_interface]
       protocol    = "TCP"
@@ -126,6 +127,7 @@ locals {
       description = "Public secondary authoritative DNS TCP"
     }
     public_dns2_udp = {
+      enabled     = var.public_dns_ingress
       sequence    = 305
       interfaces  = [var.primary_router.wan_interface]
       protocol    = "UDP"
@@ -315,7 +317,7 @@ resource "opnsense_firewall_alias" "rigi_internal_ipv6" {
 resource "opnsense_firewall_filter" "rigi" {
   for_each = local.router_firewall_rules
 
-  enabled     = true
+  enabled     = try(each.value.enabled, true)
   sequence    = each.value.sequence
   description = each.value.description
 
@@ -395,6 +397,7 @@ locals {
       description      = "Rigi internal NTP IPv6"
     }
     public_dns2_tcp = {
+      enabled          = var.public_dns_ingress
       sequence         = 394
       interfaces       = [var.primary_router.wan_interface]
       interface_invert = false
@@ -406,6 +409,7 @@ locals {
       description      = "Public secondary authoritative DNS TCP IPv6"
     }
     public_dns2_udp = {
+      enabled          = var.public_dns_ingress
       sequence         = 395
       interfaces       = [var.primary_router.wan_interface]
       interface_invert = false
@@ -455,7 +459,7 @@ locals {
 resource "opnsense_firewall_filter" "rigi_ipv6" {
   for_each = local.router_firewall_ipv6_rules
 
-  enabled     = true
+  enabled     = try(each.value.enabled, true)
   sequence    = each.value.sequence
   description = each.value.description
 

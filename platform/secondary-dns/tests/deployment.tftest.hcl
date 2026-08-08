@@ -161,6 +161,10 @@ run "rigi_immutable_composition" {
       opnsense_firewall_filter.rigi["internal_dns_tcp"].interface.invert &&
       opnsense_firewall_filter.rigi_ipv6["internal_ntp"].interface.invert &&
       opnsense_firewall_filter.rigi_ipv6["internal_ntp"].interface.interface == toset(["opt1"]) &&
+      !opnsense_firewall_filter.rigi["public_dns2_tcp"].enabled &&
+      !opnsense_firewall_filter.rigi["public_dns2_udp"].enabled &&
+      !opnsense_firewall_filter.rigi_ipv6["public_dns2_tcp"].enabled &&
+      !opnsense_firewall_filter.rigi_ipv6["public_dns2_udp"].enabled &&
       !opnsense_firewall_filter.rigi_ipv6["public_dns2_tcp"].interface.invert &&
       opnsense_firewall_filter.rigi_ipv6["public_dns2_tcp"].filter.destination.net == "2001:db8:200::114"
     )
@@ -176,6 +180,24 @@ run "rigi_immutable_composition" {
       output.public_dns_ipv6_address == "2001:db8:200::114"
     )
     error_message = "Rigi outputs must preserve the approved service identities."
+  }
+}
+
+run "explicit_public_dns_ingress" {
+  command = plan
+
+  variables {
+    public_dns_ingress = true
+  }
+
+  assert {
+    condition = (
+      opnsense_firewall_filter.rigi["public_dns2_tcp"].enabled &&
+      opnsense_firewall_filter.rigi["public_dns2_udp"].enabled &&
+      opnsense_firewall_filter.rigi_ipv6["public_dns2_tcp"].enabled &&
+      opnsense_firewall_filter.rigi_ipv6["public_dns2_udp"].enabled
+    )
+    error_message = "Rigi public authoritative DNS must require its explicit Etna WAN ingress gate."
   }
 }
 
