@@ -282,6 +282,15 @@ resource "opnsense_bind_record" "public_ns2_ipv4" {
   depends_on = [opnsense_bind_primary_domain_transfer.public]
 }
 
+resource "opnsense_bind_record" "public_ns2_ipv6" {
+  domain_id = var.primary_router.public_zone_id
+  name      = "ns2"
+  type      = "AAAA"
+  value     = local.public_ipv6
+
+  depends_on = [opnsense_bind_primary_domain_transfer.public]
+}
+
 resource "opnsense_firewall_alias" "rigi_private_ipv4" {
   name        = "RIGI_PRIVATE_V4"
   type        = "network"
@@ -342,32 +351,103 @@ resource "opnsense_firewall_filter" "rigi" {
 locals {
   router_firewall_ipv6_rules = {
     management_ssh = {
-      sequence    = 390
-      protocol    = "TCP"
-      destination = local.management_ipv6
-      port        = "22"
-      description = "Rigi management SSH IPv6 from trusted internal networks"
+      sequence         = 390
+      interfaces       = [var.primary_router.wan_interface]
+      interface_invert = true
+      protocol         = "TCP"
+      source           = opnsense_firewall_alias.rigi_internal_ipv6.name
+      destination      = local.management_ipv6
+      port             = "22"
+      invert           = false
+      description      = "Rigi management SSH IPv6 from trusted internal networks"
     }
     internal_dns_tcp = {
-      sequence    = 391
-      protocol    = "TCP"
-      destination = local.dns_ipv6
-      port        = "53"
-      description = "Rigi internal DNS TCP IPv6"
+      sequence         = 391
+      interfaces       = [var.primary_router.wan_interface]
+      interface_invert = true
+      protocol         = "TCP"
+      source           = opnsense_firewall_alias.rigi_internal_ipv6.name
+      destination      = local.dns_ipv6
+      port             = "53"
+      invert           = false
+      description      = "Rigi internal DNS TCP IPv6"
     }
     internal_dns_udp = {
-      sequence    = 392
-      protocol    = "UDP"
-      destination = local.dns_ipv6
-      port        = "53"
-      description = "Rigi internal DNS UDP IPv6"
+      sequence         = 392
+      interfaces       = [var.primary_router.wan_interface]
+      interface_invert = true
+      protocol         = "UDP"
+      source           = opnsense_firewall_alias.rigi_internal_ipv6.name
+      destination      = local.dns_ipv6
+      port             = "53"
+      invert           = false
+      description      = "Rigi internal DNS UDP IPv6"
     }
     internal_ntp = {
-      sequence    = 393
-      protocol    = "UDP"
-      destination = local.ntp_ipv6
-      port        = "123"
-      description = "Rigi internal NTP IPv6"
+      sequence         = 393
+      interfaces       = [var.primary_router.wan_interface]
+      interface_invert = true
+      protocol         = "UDP"
+      source           = opnsense_firewall_alias.rigi_internal_ipv6.name
+      destination      = local.ntp_ipv6
+      port             = "123"
+      invert           = false
+      description      = "Rigi internal NTP IPv6"
+    }
+    public_dns2_tcp = {
+      sequence         = 394
+      interfaces       = [var.primary_router.wan_interface]
+      interface_invert = false
+      protocol         = "TCP"
+      source           = "any"
+      destination      = local.public_ipv6
+      port             = "53"
+      invert           = false
+      description      = "Public secondary authoritative DNS TCP IPv6"
+    }
+    public_dns2_udp = {
+      sequence         = 395
+      interfaces       = [var.primary_router.wan_interface]
+      interface_invert = false
+      protocol         = "UDP"
+      source           = "any"
+      destination      = local.public_ipv6
+      port             = "53"
+      invert           = false
+      description      = "Public secondary authoritative DNS UDP IPv6"
+    }
+    dns_internet_egress = {
+      sequence         = 396
+      interfaces       = [opnsense_interfaces_assignment.rigi["dns"].name]
+      interface_invert = false
+      protocol         = "any"
+      source           = local.dns_ipv6
+      destination      = opnsense_firewall_alias.rigi_internal_ipv6.name
+      port             = ""
+      invert           = true
+      description      = "Rigi DNS2 IPv6 Internet egress through NAT66"
+    }
+    ntp_internet_egress = {
+      sequence         = 397
+      interfaces       = [opnsense_interfaces_assignment.rigi["ntp"].name]
+      interface_invert = false
+      protocol         = "any"
+      source           = local.ntp_ipv6
+      destination      = opnsense_firewall_alias.rigi_internal_ipv6.name
+      port             = ""
+      invert           = true
+      description      = "Rigi NTP2 IPv6 Internet egress through NAT66"
+    }
+    public_internet_egress = {
+      sequence         = 398
+      interfaces       = [var.primary_router.routed_interfaces["public_transport"]]
+      interface_invert = false
+      protocol         = "any"
+      source           = local.public_ipv6
+      destination      = opnsense_firewall_alias.rigi_internal_ipv6.name
+      port             = ""
+      invert           = true
+      description      = "Rigi routed-public IPv6 Internet egress without NAT"
     }
   }
 }
@@ -380,8 +460,8 @@ resource "opnsense_firewall_filter" "rigi_ipv6" {
   description = each.value.description
 
   interface = {
-    invert    = true
-    interface = [var.primary_router.wan_interface]
+    invert    = each.value.interface_invert
+    interface = each.value.interfaces
   }
 
   filter = {
@@ -392,12 +472,13 @@ resource "opnsense_firewall_filter" "rigi_ipv6" {
     protocol    = each.value.protocol
 
     source = {
-      net = opnsense_firewall_alias.rigi_internal_ipv6.name
+      net = each.value.source
     }
 
     destination = {
-      net  = each.value.destination
-      port = each.value.port
+      invert = each.value.invert
+      net    = each.value.destination
+      port   = each.value.port
     }
   }
 

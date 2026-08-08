@@ -26,8 +26,11 @@ resource "opnsense_bind_acl" "internal_dns_destination" {
 }
 
 resource "opnsense_bind_acl" "public_dns_destination" {
-  name     = "platform_public_dns_destination"
-  networks = ["${var.wan.public_dns_address}/32"]
+  name = "platform_public_dns_destination"
+  networks = [
+    "${var.wan.public_dns_address}/32",
+    "${var.wan.public_dns_ipv6_address}/128",
+  ]
 
   depends_on = [module.router_services]
 }
@@ -160,11 +163,26 @@ resource "opnsense_bind_record" "public_ns_ipv4" {
   value     = var.wan.public_dns_address
 }
 
+resource "opnsense_bind_record" "public_ns_ipv6" {
+  domain_id = opnsense_bind_primary_domain.public.id
+  name      = var.dns_zone.primary_ns_label
+  type      = "AAAA"
+  value     = var.wan.public_dns_ipv6_address
+}
+
 resource "opnsense_bind_record" "public_proxy_ipv4" {
   domain_id = opnsense_bind_primary_domain.public.id
   name      = "proxy"
   type      = "A"
   value     = var.wan.public_proxy_address
+  enabled   = var.cutover.public_proxy_vip
+}
+
+resource "opnsense_bind_record" "public_proxy_ipv6" {
+  domain_id = opnsense_bind_primary_domain.public.id
+  name      = "proxy"
+  type      = "AAAA"
+  value     = var.wan.public_proxy_ipv6_address
   enabled   = var.cutover.public_proxy_vip
 }
 
@@ -184,6 +202,8 @@ resource "opnsense_dns_service_cutover" "primary" {
     opnsense_bind_record.internal_ntp1_ipv6,
     opnsense_bind_record.public_ns,
     opnsense_bind_record.public_ns_ipv4,
+    opnsense_bind_record.public_ns_ipv6,
     opnsense_bind_record.public_proxy_ipv4,
+    opnsense_bind_record.public_proxy_ipv6,
   ]
 }

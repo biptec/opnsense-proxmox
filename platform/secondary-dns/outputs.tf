@@ -23,6 +23,11 @@ output "public_dns_address" {
   value       = local.public_ipv4
 }
 
+output "public_dns_ipv6_address" {
+  description = "Rigi routed-public DNS2 IPv6 endpoint."
+  value       = local.public_ipv6
+}
+
 output "management_vlan" {
   description = "Infrastructure VLAN delivered untagged to Rigi management NIC."
   value       = var.management.vlan_id

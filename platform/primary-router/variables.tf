@@ -72,17 +72,38 @@ variable "allow_network_readdress" {
 variable "wan" {
   description = "Primary WAN VLAN and dedicated public identities."
   type = object({
-    vlan_id                  = number
-    primary_cidr             = string
-    gateway                  = string
-    public_proxy_address     = string
-    public_dns_address       = string
-    dedicated_egress_address = string
+    vlan_id                       = number
+    primary_cidr                  = string
+    gateway                       = string
+    primary_ipv6_cidr             = string
+    ipv6_gateway                  = string
+    public_proxy_address          = string
+    public_proxy_ipv6_address     = string
+    public_dns_address            = string
+    public_dns_ipv6_address       = string
+    dedicated_egress_address      = string
+    dedicated_egress_ipv6_address = string
   })
 
   validation {
     condition     = can(cidrnetmask(var.wan.primary_cidr)) && !strcontains(var.wan.primary_cidr, ":")
     error_message = "wan.primary_cidr must be an IPv4 CIDR, for example 138.201.128.112/26."
+  }
+
+  validation {
+    condition = (
+      strcontains(var.wan.primary_ipv6_cidr, ":") &&
+      try(tonumber(split("/", var.wan.primary_ipv6_cidr)[1]), 0) == 64 &&
+      can(cidrhost(var.wan.primary_ipv6_cidr, 0)) &&
+      alltrue([
+        for address in [
+          var.wan.public_proxy_ipv6_address,
+          var.wan.public_dns_ipv6_address,
+          var.wan.dedicated_egress_ipv6_address,
+        ] : cidrcontains(var.wan.primary_ipv6_cidr, address)
+      ])
+    )
+    error_message = "wan.primary_ipv6_cidr must be an IPv6 /64 containing all dedicated WAN IPv6 identities."
   }
 }
 
@@ -121,9 +142,24 @@ variable "service_networks" {
 }
 
 variable "internal_egress_networks" {
-  description = "Internal networks translated through the dedicated Source NAT address."
+  description = "Internal IPv4 networks translated through the dedicated Source NAT address."
   type        = set(string)
   default     = ["10.0.0.0/8"]
+}
+
+variable "internal_egress_ipv6_networks" {
+  description = "Internal IPv6 networks translated statefully through the dedicated WAN IPv6 egress address."
+  type        = set(string)
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for subnet in var.internal_egress_ipv6_networks :
+      strcontains(subnet, ":") && can(cidrhost(subnet, 0)) &&
+      try(cidrhost(subnet, 0), "") == try(split("/", subnet)[0], "invalid")
+    ])
+    error_message = "internal_egress_ipv6_networks must contain canonical IPv6 CIDR network addresses."
+  }
 }
 
 

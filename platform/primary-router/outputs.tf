@@ -35,9 +35,19 @@ output "public_dns_address" {
   value       = var.wan.public_dns_address
 }
 
+output "public_dns_ipv6_address" {
+  description = "Dedicated public authoritative DNS IPv6 identity."
+  value       = var.wan.public_dns_ipv6_address
+}
+
 output "public_proxy_address" {
   description = "Dedicated public reverse-proxy identity."
   value       = var.wan.public_proxy_address
+}
+
+output "public_proxy_ipv6_address" {
+  description = "Dedicated public reverse-proxy IPv6 identity."
+  value       = var.wan.public_proxy_ipv6_address
 }
 
 output "dedicated_egress_address" {
@@ -45,9 +55,19 @@ output "dedicated_egress_address" {
   value       = module.router_egress.dedicated_egress_address
 }
 
+output "dedicated_egress_ipv6_address" {
+  description = "Dedicated stateful NAT66 identity."
+  value       = module.router_egress.dedicated_egress_ipv6_address
+}
+
 output "routed_public_subnets" {
   description = "Public workload subnets excluded from outbound NAT."
   value       = module.router_egress.routed_public_subnets
+}
+
+output "routed_public_ipv6_subnets" {
+  description = "Routed-public IPv6 workload subnets excluded from NAT66."
+  value       = module.router_egress.routed_public_ipv6_subnets
 }
 
 output "trusted_internal_networks" {
@@ -114,6 +134,7 @@ output "downstream_router_contract" {
     trusted_internal_networks = var.trusted_internal_networks
     internal_dns_ipv4         = local.internal_dns_ipv4
     public_dns_ipv4           = var.wan.public_dns_address
+    public_dns_ipv6           = var.wan.public_dns_ipv6_address
     dns_active_service        = opnsense_dns_service_cutover.primary.active_service
   }
 }

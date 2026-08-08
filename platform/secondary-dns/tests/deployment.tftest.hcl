@@ -67,6 +67,7 @@ variables {
 
   public = {
     ipv4_cidr = "5.9.227.114/29"
+    ipv6_cidr = "2001:db8:200::114/64"
   }
 
   primary_router = {
@@ -75,10 +76,12 @@ variables {
     routed_interfaces   = { public_transport = "opt2" }
     routed_public_networks = {
       public_transport = {
-        vlan_id        = 3802
-        subnet         = "5.9.227.112/29"
-        router_address = "5.9.227.113"
-        description    = "Routed public transport"
+        vlan_id             = 3802
+        subnet              = "5.9.227.112/29"
+        router_address      = "5.9.227.113"
+        ipv6_subnet         = "2001:db8:200::/64"
+        router_ipv6_address = "2001:db8:200::113"
+        description         = "Routed public transport"
       }
     }
     internal_zone_id          = "77777777-7777-4777-8777-777777777777"
@@ -87,6 +90,7 @@ variables {
     trusted_internal_networks = ["10.0.0.0/8", "2001:db8::/32"]
     internal_dns_ipv4         = "10.16.16.53"
     public_dns_ipv4           = "198.51.100.88"
+    public_dns_ipv6           = "2001:db8:ffff::88"
     dns_active_service        = "bind"
   }
 
@@ -149,13 +153,16 @@ run "rigi_immutable_composition" {
       opnsense_bind_record.internal_ns2_ipv4.value == "10.16.18.53" &&
       opnsense_bind_record.public_ns2.value == "ns2.biptec.net." &&
       opnsense_bind_record.public_ns2_ipv4.value == "5.9.227.114" &&
+      opnsense_bind_record.public_ns2_ipv6.value == "2001:db8:200::114" &&
       opnsense_firewall_alias.rigi_internal_ipv4.content == toset(["10.0.0.0/8"]) &&
       opnsense_firewall_alias.rigi_internal_ipv6.content == toset(["2001:db8::/32"]) &&
       opnsense_firewall_filter.rigi["management_ssh"].interface.invert &&
       opnsense_firewall_filter.rigi["management_ssh"].interface.interface == toset(["opt1"]) &&
       opnsense_firewall_filter.rigi["internal_dns_tcp"].interface.invert &&
       opnsense_firewall_filter.rigi_ipv6["internal_ntp"].interface.invert &&
-      opnsense_firewall_filter.rigi_ipv6["internal_ntp"].interface.interface == toset(["opt1"])
+      opnsense_firewall_filter.rigi_ipv6["internal_ntp"].interface.interface == toset(["opt1"]) &&
+      !opnsense_firewall_filter.rigi_ipv6["public_dns2_tcp"].interface.invert &&
+      opnsense_firewall_filter.rigi_ipv6["public_dns2_tcp"].filter.destination.net == "2001:db8:200::114"
     )
     error_message = "Rigi state must own its NS2 and trusted-client firewall integration on every Etna ingress except WAN."
   }
@@ -165,7 +172,8 @@ run "rigi_immutable_composition" {
       output.management_address == "10.16.222.2" &&
       output.internal_dns_address == "10.16.18.53" &&
       output.internal_ntp_address == "10.16.18.122" &&
-      output.public_dns_address == "5.9.227.114"
+      output.public_dns_address == "5.9.227.114" &&
+      output.public_dns_ipv6_address == "2001:db8:200::114"
     )
     error_message = "Rigi outputs must preserve the approved service identities."
   }
@@ -181,10 +189,12 @@ run "reject_secondary_before_primary_bind_cutover" {
       routed_interfaces   = { public_transport = "opt2" }
       routed_public_networks = {
         public_transport = {
-          vlan_id        = 3802
-          subnet         = "5.9.227.112/29"
-          router_address = "5.9.227.113"
-          description    = "Routed public transport"
+          vlan_id             = 3802
+          subnet              = "5.9.227.112/29"
+          router_address      = "5.9.227.113"
+          ipv6_subnet         = "2001:db8:200::/64"
+          router_ipv6_address = "2001:db8:200::113"
+          description         = "Routed public transport"
         }
       }
       internal_zone_id          = "77777777-7777-4777-8777-777777777777"
@@ -193,6 +203,7 @@ run "reject_secondary_before_primary_bind_cutover" {
       trusted_internal_networks = ["10.0.0.0/8", "2001:db8::/32"]
       internal_dns_ipv4         = "10.16.16.53"
       public_dns_ipv4           = "198.51.100.88"
+      public_dns_ipv6           = "2001:db8:ffff::88"
       dns_active_service        = "unbound"
     }
   }
@@ -222,6 +233,7 @@ run "reject_public_identity_outside_shared_transport" {
   variables {
     public = {
       ipv4_cidr = "5.9.227.122/29"
+      ipv6_cidr = "2001:db8:200::114/64"
     }
   }
 

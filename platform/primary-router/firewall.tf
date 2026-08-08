@@ -295,6 +295,56 @@ locals {
         description      = "Internal NTP IPv6"
       }
     },
+    {
+      public_dns_tcp_ipv6 = {
+        enabled          = var.cutover.dns_target == "bind"
+        sequence         = 400
+        interfaces       = [opnsense_interfaces_assignment.wan.name]
+        interface_invert = false
+        action           = "pass"
+        protocol         = "TCP"
+        source           = "any"
+        destination      = var.wan.public_dns_ipv6_address
+        port             = "53"
+        description      = "Public authoritative DNS TCP IPv6"
+      }
+      public_dns_udp_ipv6 = {
+        enabled          = var.cutover.dns_target == "bind"
+        sequence         = 401
+        interfaces       = [opnsense_interfaces_assignment.wan.name]
+        interface_invert = false
+        action           = "pass"
+        protocol         = "UDP"
+        source           = "any"
+        destination      = var.wan.public_dns_ipv6_address
+        port             = "53"
+        description      = "Public authoritative DNS UDP IPv6"
+      }
+      public_proxy_http_ipv6 = {
+        enabled          = var.cutover.proxy_enabled
+        sequence         = 410
+        interfaces       = [opnsense_interfaces_assignment.wan.name]
+        interface_invert = false
+        action           = "pass"
+        protocol         = "TCP"
+        source           = "any"
+        destination      = var.wan.public_proxy_ipv6_address
+        port             = "80"
+        description      = "Public reverse proxy HTTP IPv6"
+      }
+      public_proxy_https_ipv6 = {
+        enabled          = var.cutover.proxy_enabled
+        sequence         = 411
+        interfaces       = [opnsense_interfaces_assignment.wan.name]
+        interface_invert = false
+        action           = "pass"
+        protocol         = "TCP"
+        source           = "any"
+        destination      = var.wan.public_proxy_ipv6_address
+        port             = "443"
+        description      = "Public reverse proxy HTTPS IPv6"
+      }
+    },
   )
 }
 

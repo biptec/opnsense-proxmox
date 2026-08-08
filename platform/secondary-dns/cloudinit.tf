@@ -6,6 +6,7 @@ locals {
   ntp_ipv4        = split("/", var.ntp_internal.ipv4_cidr)[0]
   ntp_ipv6        = split("/", var.ntp_internal.ipv6_cidr)[0]
   public_ipv4     = split("/", var.public.ipv4_cidr)[0]
+  public_ipv6     = split("/", var.public.ipv6_cidr)[0]
 
   internal_ipv4_networks = sort([for network in var.primary_router.trusted_internal_networks : network if !strcontains(network, ":")])
   internal_ipv6_networks = sort([for network in var.primary_router.trusted_internal_networks : network if strcontains(network, ":")])
@@ -83,14 +84,18 @@ locals {
       public = {
         id        = local.public_transport.vlan_id
         link      = "trunk0"
-        addresses = [var.public.ipv4_cidr]
+        addresses = [var.public.ipv4_cidr, var.public.ipv6_cidr]
         routes = [
           { to = "0.0.0.0/0", via = local.public_transport.router_address, metric = 100 },
           { to = cidrsubnet(var.public.ipv4_cidr, 0, 0), scope = "link", table = local.public_transport.vlan_id },
           { to = "0.0.0.0/0", via = local.public_transport.router_address, table = local.public_transport.vlan_id },
+          { to = "::/0", via = local.public_transport.router_ipv6_address, metric = 100 },
+          { to = cidrsubnet(var.public.ipv6_cidr, 0, 0), scope = "link", table = local.public_transport.vlan_id },
+          { to = "::/0", via = local.public_transport.router_ipv6_address, table = local.public_transport.vlan_id },
         ]
         "routing-policy" = [
           { from = "${local.public_ipv4}/32", table = local.public_transport.vlan_id, priority = 103802 },
+          { from = "${local.public_ipv6}/128", table = local.public_transport.vlan_id, priority = 103803 },
         ]
       }
     }
@@ -103,7 +108,7 @@ locals {
     options {
         directory "/var/cache/bind";
         listen-on port 53 { ${local.dns_ipv4}; ${local.public_ipv4}; };
-        listen-on-v6 port 53 { ${local.dns_ipv6}; };
+        listen-on-v6 port 53 { ${local.dns_ipv6}; ${local.public_ipv6}; };
         recursion no;
         allow-query { none; };
         dnssec-validation auto;
@@ -147,10 +152,11 @@ locals {
 
     view "public" {
         match-clients { any; };
-        match-destinations { ${local.public_ipv4}; };
+        match-destinations { ${local.public_ipv4}; ${local.public_ipv6}; };
         recursion no;
         allow-query { any; };
         transfer-source ${local.public_ipv4};
+        transfer-source-v6 ${local.public_ipv6};
 
         zone "${trimsuffix(var.primary_router.zone_name, ".")}" {
             type secondary;

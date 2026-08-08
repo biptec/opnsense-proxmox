@@ -8,15 +8,21 @@ mock_provider "opnsense" {
 }
 
 variables {
-  wan_interface            = "wan"
-  wan_primary_address      = "198.51.100.112"
-  wan_primary_prefix       = 26
-  wan_gateway              = "198.51.100.65"
-  dedicated_egress_address = "198.51.100.95"
-  service_binding_guard    = "router-services-applied"
-  reserved_addresses       = ["192.0.2.10", "198.51.100.88", "198.51.100.87", "10.53.0.2"]
-  internal_egress_networks = ["10.0.0.0/8", "172.16.0.0/12"]
-  routed_public_subnets    = ["203.0.113.112/29"]
+  wan_interface                 = "wan"
+  wan_primary_address           = "198.51.100.112"
+  wan_primary_prefix            = 26
+  wan_primary_ipv6_address      = "2001:db8:ffff::112"
+  wan_primary_ipv6_prefix       = 64
+  wan_gateway                   = "198.51.100.65"
+  dedicated_egress_address      = "198.51.100.95"
+  dedicated_egress_ipv6_address = "2001:db8:ffff::95"
+  service_binding_guard         = "router-services-applied"
+  reserved_addresses            = ["192.0.2.10", "198.51.100.88", "198.51.100.87", "10.53.0.2"]
+  reserved_ipv6_addresses       = ["2001:db8:ffff::88", "2001:db8:ffff::87", "2001:db8:53::2"]
+  internal_egress_networks      = ["10.0.0.0/8", "172.16.0.0/12"]
+  internal_egress_ipv6_networks = ["2001:db8:100::/48"]
+  routed_public_subnets         = ["203.0.113.112/29"]
+  routed_public_ipv6_subnets    = ["2001:db8:200::/64"]
 }
 
 run "detached_by_default" {
@@ -25,10 +31,14 @@ run "detached_by_default" {
   assert {
     condition = (
       length(opnsense_interfaces_vip.dedicated_egress) == 0 &&
+      length(opnsense_interfaces_vip.dedicated_egress_ipv6) == 0 &&
       opnsense_firewall_nat_settings.outbound.mode == "automatic" &&
       length(opnsense_firewall_alias.internal_egress) == 0 &&
+      length(opnsense_firewall_alias.internal_egress_ipv6) == 0 &&
       length(opnsense_firewall_nat.routed_public_no_nat) == 0 &&
-      length(opnsense_firewall_nat.dedicated_egress) == 0
+      length(opnsense_firewall_nat.routed_public_ipv6_no_nat) == 0 &&
+      length(opnsense_firewall_nat.dedicated_egress) == 0 &&
+      length(opnsense_firewall_nat.dedicated_egress_ipv6) == 0
     )
     error_message = "Egress VIP and custom NAT rules must remain detached by default while the owned outbound NAT mode stays automatic."
   }
@@ -46,7 +56,9 @@ run "explicit_egress_vip" {
       opnsense_interfaces_vip.dedicated_egress[0].mode == "ipalias" &&
       opnsense_interfaces_vip.dedicated_egress[0].interface == "wan" &&
       opnsense_interfaces_vip.dedicated_egress[0].network == "198.51.100.95/32" &&
-      opnsense_interfaces_vip.dedicated_egress[0].no_bind
+      opnsense_interfaces_vip.dedicated_egress[0].no_bind &&
+      opnsense_interfaces_vip.dedicated_egress_ipv6[0].network == "2001:db8:ffff::95/128" &&
+      opnsense_interfaces_vip.dedicated_egress_ipv6[0].no_bind
     )
     error_message = "The dedicated egress identity must be a non-bindable WAN /32 IP Alias."
   }
@@ -68,7 +80,9 @@ run "outbound_nat_contract" {
   assert {
     condition = (
       opnsense_firewall_alias.internal_egress[0].name == "INTERNAL_EGRESS_NETWORKS" &&
-      opnsense_firewall_alias.internal_egress[0].content == toset(["10.0.0.0/8", "172.16.0.0/12"])
+      opnsense_firewall_alias.internal_egress[0].content == toset(["10.0.0.0/8", "172.16.0.0/12"]) &&
+      opnsense_firewall_alias.internal_egress_ipv6[0].name == "INTERNAL_EGRESS_V6" &&
+      opnsense_firewall_alias.internal_egress_ipv6[0].content == toset(["2001:db8:100::/48"])
     )
     error_message = "Internal egress networks must be represented by one explicit firewall alias."
   }
@@ -84,12 +98,32 @@ run "outbound_nat_contract" {
 
   assert {
     condition = (
+      opnsense_firewall_nat.routed_public_ipv6_no_nat["2001:db8:200::/64"].disable_nat &&
+      opnsense_firewall_nat.routed_public_ipv6_no_nat["2001:db8:200::/64"].ip_protocol == "inet6" &&
+      opnsense_firewall_nat.routed_public_ipv6_no_nat["2001:db8:200::/64"].sequence == 905000
+    )
+    error_message = "Routed-public IPv6 workloads must bypass stateful NAT66."
+  }
+
+  assert {
+    condition = (
       !opnsense_firewall_nat.dedicated_egress[0].disable_nat &&
       opnsense_firewall_nat.dedicated_egress[0].sequence == 910000 &&
       opnsense_firewall_nat.dedicated_egress[0].source.net == "INTERNAL_EGRESS_NETWORKS" &&
       opnsense_firewall_nat.dedicated_egress[0].target.ip == "198.51.100.95"
     )
     error_message = "Internal networks must translate through the dedicated egress address."
+  }
+
+  assert {
+    condition = (
+      !opnsense_firewall_nat.dedicated_egress_ipv6[0].disable_nat &&
+      opnsense_firewall_nat.dedicated_egress_ipv6[0].ip_protocol == "inet6" &&
+      opnsense_firewall_nat.dedicated_egress_ipv6[0].sequence == 915000 &&
+      opnsense_firewall_nat.dedicated_egress_ipv6[0].source.net == "INTERNAL_EGRESS_V6" &&
+      opnsense_firewall_nat.dedicated_egress_ipv6[0].target.ip == "2001:db8:ffff::95"
+    )
+    error_message = "Internal IPv6 networks must use stateful many-to-one NAT66 through the dedicated WAN /128."
   }
 }
 

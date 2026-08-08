@@ -50,12 +50,12 @@ The helper is idempotent and uses only `tofu state show` and `tofu import`; it d
 
 This state owns only Etna and shared transport:
 
-- VLAN `3801` WAN and its default gateway;
-- VLAN `3802` routed public transport;
+- VLAN `3801` dual-stack WAN with IPv4 gateway `138.201.128.65` and Hetzner IPv6 gateway `fe80::1`;
+- VLAN `3802` routed public transport for both `5.9.227.112/29` and `2a01:4f8:fff3:107::/64`;
 - Etna management IP aliases;
 - portable DNS1, NTP1, reverse-proxy, and Source NAT `/30` loopbacks and reserved VLAN identities;
 - BIND/reverse-proxy base settings and NTP1 service binding;
-- dedicated outbound-NAT identity and shared NO-NAT policy when explicitly activated.
+- dedicated outbound-NAT identities and shared NO-NAT policy when explicitly activated, including stateful NAT66 for stable internal IPv6 space.
 
 It does **not** pre-create downstream host/service VLANs, routes, firewall rules, secondary DNS configuration, or application-specific resources. Each downstream Terraform state owns both its workload and every additive Etna resource required by that workload. Destroying that state therefore removes its router integration as well.
 
@@ -70,6 +70,14 @@ All cutover flags default to false. The initial platform apply therefore does no
 The first ownership apply intentionally changes the imported WebGUI/SSH listener configuration, so run it once with `allow_management_readdress = true`. Use `-parallelism=1`: OPNsense serializes configd writes and a parallel first apply can create a long lock queue. After that apply succeeds, immediately apply the same safe configuration again with the default `allow_management_readdress = false` to relock the guard. Subsequent plans should keep the guard false unless a reviewed management readdress is intentional.
 
 `terraform.tfvars.example` contains only approved Etna and shared-transport addressing. Downstream addressing belongs to its own state. Copy it to a gitignored `.tfvars` file for the test deployment; secrets stay in environment variables.
+
+## IPv6 WAN and egress
+
+Etna uses the server-assigned `2a01:4f8:172:2bae::/64` on WAN with `fe80::1` as the provider gateway. The production identities intentionally mirror the IPv4 suffixes: `::112` primary WAN, `::87` public reverse proxy, `::88` DNS1, and `::95` stateful NAT66 egress. NTP1 has no public WAN IPv6 identity.
+
+Internal infrastructure keeps stable `2a07:e580:a10::/48` addressing. When outbound NAT is activated, IPv6 from that prefix is translated statefully many-to-one to `2a01:4f8:172:2bae::95`; this is ordinary Source NAT/NAT66, not NPTv6. The Failover subnet `2a01:4f8:fff3:107::/64` is explicitly excluded from NAT66 and is routed through VLAN `3802`, where Etna uses `::113` as the downstream gateway.
+
+Hetzner routes server IPv6 subnets to a link-local MAC target. Before production cutover, verify in Robot that both the server-assigned `/64` and the Failover `/64` are delivered to the L2 identity that reaches Etna. Do not add a Proxmox host route unless that delivery test proves it is required and the change is reviewed separately.
 
 ## DNS and firewall cutover
 
@@ -95,7 +103,7 @@ The dependency graph attaches the VIP, runs the guarded DNS cutover, verifies BI
 
 Internal DNS recursion is allowed only for `trusted_internal_networks` and only on the internal DNS destination. The public view matches the public DNS destination, permits authoritative queries, and has recursion disabled.
 
-NTP has no WAN rule. Internal UDP/123 opens only when `ntp_serving = true`. Public reverse-proxy TCP/80 and TCP/443 opens only when the proxy service and its public VIP are explicitly activated. Primary-owned internal service and management rules apply on every Etna ingress interface except WAN, constrained by their source/destination identities; this lets future downstream states reach primary services without the primary state enumerating their interfaces. The outbound NAT mode is always owned by this state: `automatic` while egress is safe/detached and `hybrid` while explicit NO-NAT/SNAT rules are active. Downstream states own the firewall pass rules that permit their workloads to use that shared egress policy.
+NTP has no WAN rule. Internal UDP/123 opens only when `ntp_serving = true`. Public reverse-proxy TCP/80 and TCP/443 and public authoritative DNS TCP/UDP 53 are opened in both address families only with their existing cutover gates. Primary-owned internal service and management rules apply on every Etna ingress interface except WAN, constrained by source/destination identities. The outbound NAT mode is always owned by this state: `automatic` while egress is safe/detached and `hybrid` while explicit IPv4 NO-NAT/SNAT and IPv6 NO-NAT/NAT66 rules are active. Downstream states own the firewall pass rules that permit their workloads to use that shared egress policy.
 
 ## Management endpoint cutover
 
