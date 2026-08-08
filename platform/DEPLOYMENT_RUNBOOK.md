@@ -22,7 +22,7 @@ Router-local public identities are `138.201.128.87` / `2a01:4f8:172:2bae::87` fo
 
 The shared routed-public transport is VLAN `3802`: Etna uses `5.9.227.113` and `2a01:4f8:fff3:107::113`; Rigi uses `5.9.227.114` and `2a01:4f8:fff3:107::114`.
 
-The provider-facing MAC is `90:1b:0e:95:a1:0b`. Terraform assigns it to Etna NIC1 from the first boot. The Proxmox trunk bridge must retain a different bridge MAC; preserve the current `vmbr1` MAC `72:36:cd:de:1d:28` explicitly during host cutover.
+The provider-facing MAC is `90:1b:0e:95:a1:0b`. Terraform assigns it to Etna NIC1 from the first boot. Tofana uses three distinct MAC identities during normal runtime: Etna WAN keeps `90:1b:0e:95:a1:0b`, `vmbr1` is pinned to `72:36:cd:de:1d:28`, and physical `nic0` temporarily uses locally-administered `92:1b:0e:95:a1:0b`. A reboot restores the physical NIC hardware MAC together with the persistent rescue bridge configuration.
 
 ## Phase 0: preflight
 
@@ -36,11 +36,19 @@ cp platform/primary-router/terraform.tfvars.example platform/primary-router/terr
 cp platform/secondary-dns/terraform.tfvars.example platform/secondary-dns/terraform.tfvars
 ```
 
-Supply Proxmox credentials/image inputs outside Git. Before applying, verify that Tofana `nic0` still has MAC `90:1b:0e:95:a1:0b` and that `vmbr1` has a distinct MAC.
+Supply Proxmox credentials/image inputs outside Git. Before applying, verify that Tofana `nic0` still has MAC `90:1b:0e:95:a1:0b`.
 
-Etna uses its final unrestricted tagged trunk from the first boot, including VLAN `3801`, and NIC1 already carries the provider-facing MAC. This is safe before cutover because Etna NIC1 is attached to `vmbr1` while physical `nic0` remains on the separate `vmbr0`; there is no L2 path between them.
+Prepare the two non-provider bridges **without moving `nic0` or the live WAN address**:
 
-**Stop gate:** do not continue if Tofana lacks console/rescue access, state backup is unavailable, or the provider-facing physical NIC is already mapped to VLAN `3801`.
+- make `vmbr1` VLAN-aware, allow the production VLAN range, and pin its bridge MAC to `72:36:cd:de:1d:28`;
+- create host-only `vmbr2` for Etna management. Tofana uses `10.16.214.1/30` and `10.16.214.5/30`; Etna uses `.2` and `.6`. Configure the corresponding Tofana IPv6 peers `2a07:e580:a10:d600::1/64` and `2a07:e580:a10:d604::1/64`;
+- keep `vmbr0` unchanged as the live rescue/WAN bridge with `nic0`, `138.201.128.112/26`, and gateway `138.201.128.65`.
+
+The current legacy `10.200.0.0/24` address and NAT/DNAT/FORWARD rules may remain active during pre-cutover validation if existing workloads still need them. They are not part of the final persistent rescue configuration and must be removed from the staged `/etc/network/interfaces` before the first WAN handoff. Do not reload that final file yet.
+
+Etna uses host-only `vmbr2` for management and its final unrestricted `vmbr1` trunk from first boot, including VLAN `3801`. NIC1 already carries the provider-facing MAC. This is safe because physical `nic0` remains on separate rescue `vmbr0`; there is no provider-facing L2 path from `vmbr1`.
+
+**Stop gate:** do not continue if Tofana lacks console/reset access, `vmbr2` cannot reach Etna management after deployment, state backup is unavailable, or physical `nic0` is already a member of `vmbr1`.
 
 ## Phase 1: deploy Etna VM with WAN physically isolated
 
@@ -55,7 +63,7 @@ tofu -chdir=tofu apply \
   -var-file=../platform/primary-router/vm-bootstrap.tfvars
 ```
 
-Verify Etna boots, QEMU Guest Agent becomes ready, management SSH answers on `10.16.214.2`, and NIC1 has MAC `90:1b:0e:95:a1:0b` on the unrestricted trunk. Confirm separately on Tofana that physical `nic0` still belongs to `vmbr0` and is not a member of `vmbr1`, so the duplicate MAC identities remain on separate L2 domains and Etna still has no physical WAN path.
+Verify Etna boots and is configured `onboot=1`, QEMU Guest Agent becomes ready, management SSH answers on `10.16.214.2` through host-only `vmbr2`, and NIC1 has MAC `90:1b:0e:95:a1:0b` on the unrestricted `vmbr1` trunk. Confirm physical `nic0` still belongs only to `vmbr0`.
 
 Create the initial OPNsense API key through the approved SSH bootstrap and export `OPNSENSE_URI`, `OPNSENSE_API_KEY`, `OPNSENSE_API_SECRET`, and `OPNSENSE_ALLOW_INSECURE` as appropriate.
 
@@ -132,19 +140,40 @@ Rigi cloud-init installs packages from Ubuntu repositories and its normal Intern
 
 ## Phase 4: router-only WAN cutover
 
-Before the maintenance window, prepare an out-of-band rollback using the Hetzner/Proxmox console. The Proxmox API/control path used for the cutover must not depend on the WAN address being moved.
+The first cutover uses `proxmox-wan-cutover`; it does **not** persist the production L2 handoff. Before the maintenance window, install it on Tofana in its default disarmed state and create `/etc/wan-cutover.conf` with these production values:
 
-Before touching host networking, verify again that Etna NIC1 already has MAC `90:1b:0e:95:a1:0b`. No Terraform VM change is required during the maintenance window. Also pin `vmbr1` to its distinct current MAC `72:36:cd:de:1d:28`; otherwise adding `nic0` can change the bridge MAC and collide with Etna's provider-facing identity. Proxmox supports an explicit `hwaddress` on a Linux bridge.
+```bash
+TARGET_VM_ID=<tofu-output-vm_id>
+TARGET_VM_NAME="etna"
+TARGET_WAN_NET_INDEX=1
+TARGET_WAN_MAC="90:1b:0e:95:a1:0b"
+WAN_INTERFACE="nic0"
+RESCUE_BRIDGE="vmbr0"
+HOST_PUBLIC_CIDR="138.201.128.112/26"
+HOST_PUBLIC_GATEWAY="138.201.128.65"
+PROVIDER_MAC="90:1b:0e:95:a1:0b"
+PRODUCTION_BRIDGE="vmbr1"
+PRODUCTION_BRIDGE_MAC="72:36:cd:de:1d:28"
+WAN_VLAN_ID=3801
+RUNTIME_WAN_MAC="92:1b:0e:95:a1:0b"
+HOST_ROUTER_INTERFACE="vmbr2"
+TARGET_ROUTER_IP="10.16.214.2"
+```
 
-The maintenance-window sequence is:
+Stage the final persistent `/etc/network/interfaces` as the **rescue state**: `vmbr0` owns `nic0` plus the public IP/gateway, `vmbr1` is VLAN-aware with no physical port, and `vmbr2` is host-only management. Remove the old `10.200.0.0/24` NAT/DNAT/FORWARD directives from this staged persistent file. Do not persist `nic0 -> vmbr1`; normal production handoff is runtime-only.
 
-1. save the current Tofana network configuration, routes, and `/etc/network/interfaces` through the out-of-band channel;
-2. remove Tofana ownership of `138.201.128.112/26` and the provider default route from `vmbr0`;
-3. remove `nic0` from `vmbr0`;
-4. keep `vmbr1` VLAN-aware, pin its bridge MAC to `72:36:cd:de:1d:28`, add `nic0` as a bridge port, and configure `bridge-access 3801` under the `nic0` port; provider-facing Ethernet remains untagged while VLAN `3801` is tagged only inside the bridge toward Etna;
-5. apply the host network change through the out-of-band console/control path and verify Etna management before testing WAN.
+Back up the previous network file and verify `wan-cutover validate`. It must prove Etna is already running, NIC1 has the provider MAC on `vmbr1`, `vmbr1` is VLAN-aware with its distinct bridge MAC, Tofana reaches `10.16.214.2` through `vmbr2`, and `nic0` still owns the direct rescue WAN on `vmbr0`.
 
-Etna does not need to be stopped solely for this cutover and its Terraform bootstrap state is not changed during the maintenance window.
+Perform the first handoff without rebooting:
+
+```bash
+wan-cutover cutover-now
+wan-cutover status
+```
+
+The runtime operation removes the public address/default route from `vmbr0`, detaches `nic0`, changes only the host-side physical NIC MAC to `92:1b:0e:95:a1:0b`, attaches it to `vmbr1` as untagged access/PVID VLAN `3801`, and installs Tofana's default route through Etna management `10.16.214.2`. Etna stays running and Terraform state is not modified.
+
+If Tofana management remains reachable and WAN validation fails, use `wan-cutover rollback-now`. If Tofana becomes unreachable, reset/reboot it: the persistent rescue configuration restores direct WAN to Tofana. The automatic service remains disarmed during this first acceptance test, so a reboot cannot hand WAN back to Etna on its own.
 
 Do not enable any public-service ingress at this stage. Primary BIND may remain active with its VIP attached because `public_dns_ingress = false` keeps WAN TCP/UDP 53 blocked.
 
@@ -168,7 +197,9 @@ cutover = {
 
 Apply and verify IPv4 SNAT uses `138.201.128.95`, IPv6 stateful NAT66 uses `2a01:4f8:172:2bae::95`, and both routed-public networks remain NO-NAT. Require a clean follow-up plan.
 
-**Rollback gate:** if management, gateway reachability, NAT, or provider IPv6 delivery is wrong, stop here. Through the out-of-band console, remove `nic0` from `vmbr1`, restore it as the `vmbr0` bridge port, restore `138.201.128.112/26` and the provider default route on `vmbr0`, and do not continue to Rigi or public services. Etna may keep its configured MAC because it becomes L2-isolated again.
+**Rollback gate:** if management, gateway reachability, NAT, or provider IPv6 delivery is wrong, stop here. Prefer `wan-cutover rollback-now` while Tofana management is available; otherwise reboot/reset Tofana. Both paths restore `nic0` to rescue `vmbr0` with hardware MAC `90:1b:0e:95:a1:0b`, the public IP, and provider default route. Do not continue to Rigi or public services.
+
+After a successful first handoff, perform one deliberate reboot recovery test before enabling automation. Confirm direct SSH to Tofana during the recovery window, run `wan-cutover disarm`, and verify the host remains in rescue state. Only after that test succeeds run `wan-cutover arm` for future delayed automatic handoffs.
 
 ## Phase 5: deploy and lifecycle-test Rigi
 

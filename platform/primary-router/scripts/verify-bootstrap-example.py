@@ -14,12 +14,16 @@ cmd = [
 result = subprocess.run(
     cmd,
     cwd=root,
-    input="jsonencode(var.additional_nics)\n",
+    input="jsonencode({bridge=var.bridge, vm_started=var.vm_started, vm_on_boot=var.vm_on_boot, additional_nics=var.additional_nics})\n",
     text=True,
     capture_output=True,
     check=True,
 )
-nics = json.loads(json.loads(result.stdout.strip()))
+payload = json.loads(json.loads(result.stdout.strip()))
+assert payload["bridge"] == "vmbr2"
+assert payload["vm_started"] is True
+assert payload["vm_on_boot"] is True
+nics = payload["additional_nics"]
 assert len(nics) == 1
 assert nics[0]["bridge"] == "vmbr1"
 assert nics[0]["trunks"] is None
