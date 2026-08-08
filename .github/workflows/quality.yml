@@ -78,9 +78,6 @@ jobs:
       - name: Initialize VM bootstrap root
         run: tofu -chdir=tofu init -backend=false -input=false
 
-      - name: Verify Etna pre-cutover trunk staging
-        run: platform/primary-router/scripts/verify-bootstrap-staging.py
-
       - name: Test listener verifier
         run: python -m unittest scripts/test_verify_listeners.py
 

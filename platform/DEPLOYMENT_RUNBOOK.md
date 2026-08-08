@@ -5,7 +5,7 @@ This runbook covers the first production deployment of Etna and Rigi. It deliber
 ## Non-negotiable rules
 
 - Do not change the provider-facing configuration on Tofana during the pre-cutover Etna validation phase.
-- Keep Etna VLAN `3801` blocked at the Proxmox VM NIC until the router-only cutover.
+- Keep the provider-facing physical NIC disconnected from VLAN `3801` until the router-only cutover. Etna may carry VLAN `3801` on its internal trunk before then.
 - Keep public DNS WAN ingress, reverse proxy, and outbound NAT disabled until their explicit activation phase.
 - Keep the Etna VM bootstrap, primary-router, and secondary-dns Terraform states separate.
 - Never destroy primary-router while a downstream state still references it.
@@ -30,33 +30,30 @@ Copy only the tracked examples; keep the resulting files gitignored:
 
 ```sh
 cp platform/primary-router/vm-bootstrap.tfvars.example platform/primary-router/vm-bootstrap.tfvars
-cp platform/primary-router/vm-bootstrap-staging.tfvars.example platform/primary-router/vm-bootstrap-staging.tfvars
 cp platform/primary-router/terraform.tfvars.example platform/primary-router/terraform.tfvars
 cp platform/secondary-dns/terraform.tfvars.example platform/secondary-dns/terraform.tfvars
 ```
 
 Supply Proxmox credentials/image inputs outside Git. Do not put the provider-facing MAC into the repository; it is collected only at the WAN cutover stop gate.
 
-The temporary Etna bootstrap overlay permits only VLANs `508`, `2804`, `2820`, and `3802` on the trunk NIC. VLAN `3801` must not appear in the effective Proxmox trunk before cutover.
+Etna uses its final unrestricted tagged trunk from the first boot, including VLAN `3801`. This is safe before cutover because the provider-facing physical NIC is not yet configured as an access port for VLAN `3801`; there is no L2 path from Etna VLAN `3801` to the provider network.
 
-**Stop gate:** do not continue if Tofana lacks console/rescue access, state backup is unavailable, or the resulting Etna VM plan exposes VLAN `3801`.
+**Stop gate:** do not continue if Tofana lacks console/rescue access, state backup is unavailable, or the provider-facing physical NIC is already mapped to VLAN `3801`.
 
-## Phase 1: deploy Etna VM without WAN L2
+## Phase 1: deploy Etna VM with WAN physically isolated
 
 From the repository root:
 
 ```sh
 tofu -chdir=tofu init
 tofu -chdir=tofu plan \
-  -var-file=../platform/primary-router/vm-bootstrap.tfvars \
-  -var-file=../platform/primary-router/vm-bootstrap-staging.tfvars
+  -var-file=../platform/primary-router/vm-bootstrap.tfvars
 
 tofu -chdir=tofu apply \
-  -var-file=../platform/primary-router/vm-bootstrap.tfvars \
-  -var-file=../platform/primary-router/vm-bootstrap-staging.tfvars
+  -var-file=../platform/primary-router/vm-bootstrap.tfvars
 ```
 
-Verify Etna boots, QEMU Guest Agent becomes ready, management SSH answers on `10.16.214.2`, and the trunk NIC is present but cannot pass VLAN `3801`.
+Verify Etna boots, QEMU Guest Agent becomes ready, management SSH answers on `10.16.214.2`, and the unrestricted trunk NIC is present. Confirm separately on Tofana that the provider-facing physical NIC has no access/PVID mapping for VLAN `3801`, so Etna still has no physical WAN path.
 
 Create the initial OPNsense API key through the approved SSH bootstrap and export `OPNSENSE_URI`, `OPNSENSE_API_KEY`, `OPNSENSE_API_SECRET`, and `OPNSENSE_ALLOW_INSECURE` as appropriate.
 
@@ -95,7 +92,7 @@ The second plan must report `No changes`.
 
 ## Phase 3: stage BIND and internal services
 
-Before Rigi can consume the primary contract, move DNS ownership from Unbound to BIND while VLAN `3801` is still blocked. Set the local primary `cutover` block to:
+Before Rigi can consume the primary contract, move DNS ownership from Unbound to BIND while the provider-facing physical NIC is still disconnected from VLAN `3801`. Set the local primary `cutover` block to:
 
 ```hcl
 cutover = {
@@ -127,7 +124,7 @@ tofu -chdir=platform/secondary-dns init
 tofu -chdir=platform/secondary-dns plan -var-file=terraform.tfvars
 ```
 
-Rigi cloud-init installs packages from Ubuntu repositories and its normal Internet path is VLAN `3802` through Etna. With provider-facing VLAN `3801` intentionally blocked, a full production Rigi apply cannot complete without a temporary egress workaround. The approved sequence avoids such a workaround: only the plan is reviewed before router cutover.
+Rigi cloud-init installs packages from Ubuntu repositories and its normal Internet path is VLAN `3802` through Etna. Before the provider-facing physical NIC is mapped to VLAN `3801`, Etna has no provider WAN path, so a full production Rigi apply cannot complete without a temporary egress workaround. The approved sequence avoids such a workaround: only the plan is reviewed before router cutover.
 
 **Stop gate:** Etna management, BIND internal DNS, NTP1, primary state, and the secondary plan must all be clean before touching Tofana WAN ownership.
 
@@ -137,15 +134,15 @@ Before the maintenance window, prepare an out-of-band rollback using the Hetzner
 
 At the cutover stop gate, collect the current provider-facing MAC from Tofana. The value is intentionally not committed. Add it only to the local Etna `vm-bootstrap.tfvars` as the `mac_address` of the second NIC.
 
-With Etna stopped, review the VM bootstrap plan **without** the staging overlay. It must remove the temporary trunk allow-list and apply only the intended NIC/MAC change; do not apply if it proposes VM replacement or unrelated hardware changes.
+With Etna stopped, review the VM bootstrap plan after adding the provider-facing MAC. The trunk is already in its final unrestricted form, so the plan must apply only the intended NIC/MAC change; do not apply if it proposes VM replacement or unrelated hardware changes.
 
 The maintenance-window sequence is:
 
 1. save the current Tofana network configuration and routes locally and through the out-of-band channel;
 2. stop Etna;
 3. remove Tofana ownership of the provider-facing WAN IP/default routes and relinquish the transferred MAC;
-4. keep the physical WAN port attached to the VLAN-aware bridge with the existing access/untagged VLAN `3801` edge behavior;
-5. apply the Etna VM bootstrap **without** `vm-bootstrap-staging.tfvars`, so the transferred MAC and unrestricted trunk become effective;
+4. configure the provider-facing physical WAN NIC as access VLAN `3801` on the VLAN-aware bridge (`bridge-access 3801`): provider-facing Ethernet stays untagged and VLAN `3801` is tagged only inside the bridge toward Etna;
+5. apply the Etna VM bootstrap so the transferred provider-facing MAC becomes effective on Etna;
 6. start Etna and verify management before testing WAN.
 
 Do not enable any public-service ingress at this stage. Primary BIND may remain active with its VIP attached because `public_dns_ingress = false` keeps WAN TCP/UDP 53 blocked.
@@ -225,4 +222,4 @@ Reverse proxy remains disabled until its downstream/site configuration is ready.
 
 The platform is accepted only when all three states have clean plans, DNS1/DNS2 answer correctly over IPv4 and IPv6, NTP1/NTP2 remain internal-only, NAT44/NAT66 use the dedicated `.95`/`::95` identities, and `5.9.227.112/29` plus `2a01:4f8:fff3:107::/64` are routed without NAT.
 
-After acceptance, archive the protected state backups and the final Tofana network backup. Remove one-time API/bootstrap credentials and temporary staging tfvars. Keep the rollback instructions until the platform has completed an agreed stability period.
+After acceptance, archive the protected state backups and the final Tofana network backup. Remove one-time API/bootstrap credentials. Keep the rollback instructions until the platform has completed an agreed stability period.

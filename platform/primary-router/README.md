@@ -8,9 +8,10 @@ The Proxmox host remains a separate, persistent management domain:
 
 - `vmbr0` is the untagged management bridge used by Etna NIC0;
 - `vmbr1` is the VLAN-aware trunk bridge used by Etna NIC1;
-- the provider-facing physical WAN NIC is an access port for VLAN `3801` on `vmbr1`;
-- provider-facing Ethernet is untagged; Etna sees VLAN `3801` tagged;
-- the current `bpg/proxmox` bridge resource does not expose per-port `bridge-access`, so this host-port setting is a prerequisite rather than a router-state resource.
+- in the final production state, the provider-facing physical WAN NIC is an access port for VLAN `3801` on `vmbr1`;
+- before router cutover, that physical NIC has no access/PVID mapping for VLAN `3801`, so Etna VLAN `3801` has no provider-facing L2 path;
+- provider-facing Ethernet is untagged; after cutover Etna sees VLAN `3801` tagged inside `vmbr1`;
+- the current `bpg/proxmox` bridge resource does not expose per-port `bridge-access`, so this host-port change is a reviewed cutover action rather than a router-state resource;
 
 Do not move the live Proxmox WAN address/gateway during a test apply. The host-side cutover is a separate reviewed operation.
 
@@ -18,7 +19,7 @@ Do not move the live Proxmox WAN address/gateway during a test apply. The host-s
 
 The VM bootstrap and router configuration intentionally use two Terraform states, but they are one Etna ownership domain. The split is a bootstrap dependency, not an architectural ownership split: the OPNsense provider cannot read/import/configure Etna until the VM exists, boots, and exposes its API. Keep both Etna value files in this directory; apply the VM bootstrap state first, then the primary-router state. Destroy in reverse order.
 
-Copy `vm-bootstrap.tfvars.example` to the gitignored `vm-bootstrap.tfvars` and add the normal secret/image inputs outside Git. For the first production deployment, also copy `vm-bootstrap-staging.tfvars.example`; that later var-file limits Etna NIC1 to the Rigi validation VLANs and keeps provider-facing VLAN `3801` blocked until the router-only cutover. Follow `../DEPLOYMENT_RUNBOOK.md` rather than applying the unrestricted trunk directly.
+Copy `vm-bootstrap.tfvars.example` to the gitignored `vm-bootstrap.tfvars` and add the normal secret/image inputs outside Git. Etna uses its final unrestricted tagged trunk from the first boot. Before router cutover, VLAN `3801` remains physically isolated because the provider-facing Proxmox NIC is not yet configured as access VLAN `3801`. Follow `../DEPLOYMENT_RUNBOOK.md` for the host-side WAN cutover.
 
 ## Bootstrap
 
