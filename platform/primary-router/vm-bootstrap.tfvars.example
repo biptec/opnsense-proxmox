@@ -19,6 +19,7 @@ management_ipv4 = {
 # which is not configured as access VLAN 3801 until the maintenance window.
 additional_nics = [
   {
-    bridge = "vmbr1"
+    bridge      = "vmbr1"
+    mac_address = "90:1b:0e:95:a1:0b"
   }
 ]

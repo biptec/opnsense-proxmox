@@ -19,7 +19,7 @@ Do not move the live Proxmox WAN address/gateway during a test apply. The host-s
 
 The VM bootstrap and router configuration intentionally use two Terraform states, but they are one Etna ownership domain. The split is a bootstrap dependency, not an architectural ownership split: the OPNsense provider cannot read/import/configure Etna until the VM exists, boots, and exposes its API. Keep both Etna value files in this directory; apply the VM bootstrap state first, then the primary-router state. Destroy in reverse order.
 
-Copy `vm-bootstrap.tfvars.example` to the gitignored `vm-bootstrap.tfvars` and add the normal secret/image inputs outside Git. Etna uses its final unrestricted tagged trunk from the first boot. Before router cutover, VLAN `3801` remains physically isolated because the provider-facing Proxmox NIC is not yet configured as access VLAN `3801`. Follow `../DEPLOYMENT_RUNBOOK.md` for the host-side WAN cutover.
+Copy `vm-bootstrap.tfvars.example` to the gitignored `vm-bootstrap.tfvars` and add the normal secret/image inputs outside Git. The production provider-facing MAC `90:1b:0e:95:a1:0b` is assigned to Etna NIC1 by Terraform from its first boot. This is safe before router cutover because Etna is on `vmbr1` while the physical `nic0` still belongs to the separate `vmbr0`; VLAN `3801` therefore has no provider-facing L2 path. Follow `../DEPLOYMENT_RUNBOOK.md` for the host-side WAN cutover.
 
 ## Bootstrap
 
